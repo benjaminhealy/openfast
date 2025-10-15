@@ -70,3 +70,4 @@ pyopenfast/
 install-dev/
 install-release/
 install-testing/
+*.vtp

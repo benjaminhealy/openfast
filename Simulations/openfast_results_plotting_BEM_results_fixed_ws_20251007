@@ -1,0 +1,232 @@
+import matplotlib.pyplot as plt
+import os
+import pandas as pd
+import matplotlib.ticker as ticker
+
+
+# Create a function for consistent plot formatting
+def format_plot(ax, xlabel, ylabel, title):
+    # Set major and minor grid lines
+    ax.grid(True, which='major', linestyle='-', linewidth=0.8, alpha=0.5)
+    ax.grid(True, which='minor', linestyle=':', linewidth=0.5, alpha=0.2)
+    
+    # Customize tick spacing
+    ax.xaxis.set_major_locator(ticker.MaxNLocator(10))  # Adjust number as needed
+    ax.yaxis.set_major_locator(ticker.MaxNLocator(8))   # Adjust number as needed
+    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
+    ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
+    
+    # Disable scientific notation on both axes
+    ax.xaxis.set_major_formatter(ticker.ScalarFormatter(useOffset=False))
+    ax.yaxis.set_major_formatter(ticker.ScalarFormatter(useOffset=False))
+    ax.ticklabel_format(style='plain')
+    
+    # Increase font sizes
+    plt.xticks(fontsize=10)
+    plt.yticks(fontsize=10)
+    ax.set_xlabel(xlabel, fontsize=12, labelpad=10)
+    ax.set_ylabel(ylabel, fontsize=12, labelpad=10)
+    ax.set_title(title, fontsize=14, pad=15)
+    
+    # Add padding to prevent label cutoff
+    plt.tight_layout()
+    
+
+
+# Define path to folder and simulation outputs to plot
+base_path = os.getcwd()
+
+
+# SOURCE/UNCHANGED:
+#sim_output = '/Users/benhealy/OpenFAST/build-testing/reg_tests/glue-codes/openfast/5MW_Land_DLL_WTurb_ADsk_SED/5MW_Land_DLL_WTurb_ADsk_SED.out'
+
+# SCENARIO 1: 
+#simulation_file_name = '5MW_Land_DLL_WTurb_ADsk_SED_custom0.out'
+# merge combined path
+#folder_path = 'ex1'
+#sim_output = os.path.join(base_path, folder_path, simulation_file_name)
+
+# SCENARIO 2: 
+#sim_output ='/Users/benhealy/OpenFAST/Simulations/5MW_Land_BD_DLL_WTurb_ex2/5MW_Land_BD_DLL_WTurb_ex2.out'
+
+# SCENARIO 3: 
+sim_output ='/Users/benhealy/OpenFAST/Simulations/5MW_Land_BD_DLL_Wturb_Cp_Curve_Test/5MW_Land_BD_DLL_WTurb_CP_Curve_Test.out'
+
+
+# Read results file from desired simulation
+# results = pd.read_csv('sim_output', delim_whitespace=True, comment='#', header=None)
+
+# Read the file, skipping metadata lines until we hit the header row (the line starting with 'Time')
+with open(sim_output, "r") as f:
+    lines = f.readlines()
+
+# Find the line index where the table header starts (usually the one starting with "Time")
+header_idx = None
+for i, line in enumerate(lines):
+    if line.strip().startswith("Time"):
+        header_idx = i
+        break
+
+if header_idx is None:
+    raise ValueError("Could not find the table header (line starting with 'Time').")
+
+
+# Load data into a DataFrame
+df = pd.read_csv(sim_output, 
+                 delim_whitespace=True, 
+                 skiprows=header_idx, 
+                 header=0)
+
+df.to_excel("/Users/benhealy/OpenFAST/Simulations/5MW_Land_BD_DLL_WTurb_ex2/openfast_sim1b.xlsx", index=False)
+
+print("Columns found in file:")
+print(df.columns.tolist())
+
+print('Total data rows returned (timesteps):')
+print(df['Time'].size)
+
+print("extracting subset of data for plotting")
+df_subset = df.iloc[-1000:]
+
+#Rotor-Normal speed vs time
+plt.figure(figsize=(10,6))
+ax = plt.gca()
+plt.plot(df_subset["Time"], df_subset["RtVAvgxh"], color = 'blue', label="Wind Speed (x-dim, hub CRS)")
+plt.plot(df_subset["Time"], df_subset["RtVAvgyh"], color = 'red', label="Wind Speed (y-dim, hub CRS)")
+plt.plot(df_subset["Time"], df_subset["RtVAvgzh"], color = 'green', label="Wind Speed (z-dim, hub CRS)")
+format_plot(ax, 
+           "Time (s)", 
+           "Rotor-Normal Wind Speed [m/s]",
+           "Rotor-Normal Wind Speed vs Time")
+plt.legend()
+plt.grid(True)
+#plt.show()
+
+# Generator power vs time
+plt.figure(figsize=(10,6))
+ax = plt.gca()
+plt.plot(df_subset["Time"], df_subset["GenPwr"], label="Generator Power")
+format_plot(ax, 
+           "Time (s)", 
+           "Power (kW)",
+           "Generator Power vs Time")
+plt.legend()
+plt.grid(True)
+#plt.show()
+
+#Rotor speed vs time
+plt.figure(figsize=(10,6))
+ax = plt.gca()
+plt.plot(df_subset["Time"], df_subset["RtSpeed"], label="Rotor Speed (rpm)")
+""" plt.xlabel("Time (s)")
+plt.ylabel("Rotor Speed (rpm)")
+plt.title("Rotor Speed vs Time") """
+format_plot(ax, 
+           "Time (s)", 
+           "Rotor Speed (rpm)",
+           "Rotor Speed vs Time")
+# plt.legend()
+plt.grid(True)
+#plt.show()
+
+#Rotor TSR vs time
+plt.figure(figsize=(10,6))
+ax = plt.gca()
+plt.plot(df_subset["Time"], df_subset["RtTSR"], label="Rotor Tip Speed Ratio (-)")
+format_plot(ax, 
+           "Time (s)", 
+           "TSR (-)",
+           "Tip Speed Ratio vs Time")
+# plt.legend()
+plt.grid(True)
+
+# CT vs WS
+plt.figure(figsize=(10,6))
+ax = plt.gca()
+plt.scatter(df_subset["RtVAvgxh"], df_subset["RtAeroCt"])
+format_plot(ax, 
+           "Rotor-Normal Wind Speed [m/s]", 
+           "Thrust [-]",
+           "Rotor-Normal Wind Speed vs Thrust")
+plt.legend()
+plt.grid(True)
+#plt.show()
+
+
+""" # WD vs skew/yaw-misalignment over time
+# FINISH
+plt.figure(figsize=(10,6))
+plt.plot(df_subset["Time"], df_subset["ADVRel"], label="Rotor Speed (rpm)") #CHECK THAT ADVREL = ROTOR-NORMAL WS
+plt.xlabel("")
+plt.ylabel("")
+plt.title("")
+plt.legend()
+plt.grid(True)
+#plt.show() """
+
+# Aerodynamic force X vs yaw misalignment (ADSkew, skew angle of inflow)
+plt.figure(figsize=(10,6))
+ax = plt.gca()
+plt.scatter(df_subset["RtSkew"], df_subset["RtAeroFxh"], color = 'red', label="X-Normal")
+plt.scatter(df_subset["RtSkew"], df_subset["RtAeroFyh"], color = 'blue', label="Y-Normal")
+plt.scatter(df_subset["RtSkew"], df_subset["RtAeroFzh"], color = 'pink', label="Z-Normal")
+""" plt.xlabel("Skew of inflow angle into AD (deg)")
+plt.ylabel("Aerodynamic Force (N)")
+plt.title("Yaw-Misalignment Versus AD Loading") """
+format_plot(ax, 
+           "Skew of inflow angle into AD (deg)", 
+           "Aerodynamic Force (N)",
+           "Yaw-Misalignment Versus AD Loading")
+plt.legend()
+plt.grid(True)
+#plt.show()
+
+""" # tip speed ratio, pitch, wind speed
+#FINISH
+plt.figure(figsize=(10,6))
+plt.plot(df_subset["ADTSR"], df_subset["RotSpeed"])
+plt.xlabel("")
+plt.ylabel("")
+plt.title("")
+plt.legend()
+plt.grid(True)
+#plt.show() """
+
+# tip speed ratio VS wind speed
+plt.figure(figsize=(10,6))
+ax = plt.gca()
+plt.scatter(df_subset["ADVRel"], df_subset["ADTSR"])
+plt.xlabel("Rotor-Noraml Wind Speed")
+plt.ylabel("Tip Speed Ratio [-]")
+plt.title("Rotor-Normal Wind Speed vs Tip Speed Ratio")
+format_plot(ax, 
+           "Rotor-Normal Wind Speed", 
+           "Tip Speed Ratio [-]",
+           "Rotor-Normal Wind Speed vs Tip Speed Ratio")
+plt.legend()
+plt.grid(True)
+#plt.show()
+''''''
+
+'''
+# tip speed ratio, pitch, thrust coeff
+plt.figure(figsize=(10,6))
+plt.plot(df_subset["Time"], df_subset["RotSpeed"], label="Rotor Speed (rpm)")
+plt.xlabel("Time (s)")
+plt.ylabel("Rotor Speed (rpm)")
+plt.title("Rotor Speed vs Time")
+plt.legend()
+plt.grid(True)
+#plt.show()
+
+# tip speed ratio, pitch, power coeff
+plt.figure(figsize=(10,6))
+plt.plot(df_subset["Time"], df_subset["RotSpeed"], label="Rotor Speed (rpm)")
+plt.xlabel("Time (s)")
+plt.ylabel("Rotor Speed (rpm)")
+plt.title("Rotor Speed vs Time")
+plt.legend()
+plt.grid(True)
+#plt.show()
+'''
+plt.show()

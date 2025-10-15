@@ -1,0 +1,78 @@
+import matplotlib.pyplot as plt
+import os
+import pandas as pd
+#import openpyxl
+
+# Define path to folder and simulation outputs to plot
+base_path = os.getcwd()
+
+
+# SOURCE/UNCHANGED:
+sim_output = '/Users/benhealy/OpenFAST/build-testing/reg_tests/glue-codes/openfast/5MW_Land_DLL_WTurb_ADsk_SED/5MW_Land_DLL_WTurb_ADsk_SED.out'
+
+# SCENARIO 1: 
+simulation_file_name = '5MW_Land_DLL_WTurb_ADsk_SED_custom0.out'
+# merge combined path
+#folder_path = 'ex1'
+#sim_output = os.path.join(base_path, folder_path, simulation_file_name)
+
+# SCENARIO 2: 
+
+
+# SCENARIO 3: 
+
+
+# Read results file from desired simulation
+# results = pd.read_csv('sim_output', delim_whitespace=True, comment='#', header=None)
+
+# Read the file, skipping metadata lines until we hit the header row (the line starting with 'Time')
+with open(sim_output, "r") as f:
+    lines = f.readlines()
+
+# Find the line index where the table header starts (usually the one starting with "Time")
+header_idx = None
+for i, line in enumerate(lines):
+    if line.strip().startswith("Time"):
+        header_idx = i
+        break
+
+if header_idx is None:
+    raise ValueError("Could not find the table header (line starting with 'Time').")
+
+
+# Load data into a DataFrame
+df = pd.read_csv(sim_output, 
+                 delim_whitespace=True, 
+                 skiprows=header_idx, 
+                 header=0)
+
+df.to_excel("/Users/benhealy/Downloads/test_output.xlsx", index=False)
+
+print("Columns found in file:")
+print(df.columns.tolist())
+
+print('Total data rows returned (timesteps):')
+print(df['Time'].size)
+
+print("extracting subset of data for plotting")
+df_subset = df.iloc[2:2000]
+
+# Example plot: Generator power vs time
+plt.figure(figsize=(10,6))
+plt.plot(df_subset["Time"], df_subset["GenPwr"], label="Generator Power")
+plt.xlabel("Time (s)")
+plt.ylabel("Power (kW)")
+plt.title("Generator Power vs Time")
+plt.legend()
+plt.grid(True)
+#plt.show()
+
+# Another example: Rotor speed vs time
+plt.figure(figsize=(10,6))
+plt.plot(df_subset["Time"], df_subset["RotSpeed"], label="Rotor Speed (rpm)")
+plt.xlabel("Time (s)")
+plt.ylabel("Rotor Speed (rpm)")
+plt.title("Rotor Speed vs Time")
+plt.legend()
+plt.grid(True)
+plt.show()
