@@ -64,3 +64,9 @@ varcache
 # Python cache files
 openfast_io/dist/
 openfast_io/openfast_io/_version.py
+
+# custom ignores
+pyopenfast/
+install-dev/
+install-release/
+install-testing/
