@@ -14,8 +14,8 @@ base_path = os.getcwd()
 # Instructions for python shell to update wind speed parameters with each run
 inflow_path = '/Users/benhealy/OpenFAST/Simulations/5MW_Baseline/NRELOffshrBsline5MW_InflowWind_12mps_cp_curve.dat' # aerodyn file where wind speed will be adjusted
 param_name = 'HWindSpeed'
-ws_list = [1, 5, 10, 15, 20, 25]
-# ws_list = np.linspace(1, 15, 5)
+# ws_list = [1, 5, 10, 15, 20, 25]
+ws_list = np.linspace(1, 25, 25)
 fst_path = '5MW_Land_BD_DLL_WTurb_CP_Curve_Test.fst'  # Just the filename, since we'll run from the directory
 work_dir = '/Users/benhealy/OpenFAST/Simulations/5MW_Land_BD_DLL_Wturb_Cp_Curve_Test'
 sim_output_base = '/Users/benhealy/OpenFAST/Simulations/5MW_Land_BD_DLL_Wturb_Cp_Curve_Test/5MW_Land_BD_DLL_WTurb_CP_Curve_Test'
@@ -47,9 +47,8 @@ def modify_wind_speed(filepath, param_name, new_value):
 
 def run_openfast(fst_filename, working_directory, openfast_executable, conda_environment):
     """Run OpenFAST simulation with proper conda environment and directory"""
-    # Build command that activates conda env and runs openfast
-    command = f"source $(conda info --base)/etc/profile.d/conda.sh && conda activate {conda_environment} && cd {working_directory} && {openfast_executable} {fst_filename}"
-    
+    # command to run openfast
+    command = f"cd {working_directory} && {openfast_executable} {fst_filename}"
     result = subprocess.run(
         command,
         shell=True,
@@ -72,7 +71,7 @@ def save_results(base_name, run_name):
 
 
 def extract_steady_state_values(output_file, columns=['RtAeroCt', 'RtAeroCp', 'GenPwr'], 
-                                  steady_state_fraction=0.5):
+                                steady_state_fraction=0.3):
     """
     Extract steady-state values from OpenFAST output file
     
@@ -105,9 +104,9 @@ def extract_steady_state_values(output_file, columns=['RtAeroCt', 'RtAeroCp', 'G
     
     # Load data - skip the units row if present
     df = pd.read_csv(output_file, 
-                     delim_whitespace=True, 
-                     skiprows=header_idx, 
-                     header=0)
+                    delim_whitespace=True, 
+                    skiprows=header_idx, 
+                    header=0)
     
     # Remove units row if it exists (typically second row with parentheses)
     if df.iloc[0].astype(str).str.contains(r'\(').any():
@@ -244,3 +243,49 @@ print("\nCt (Thrust Coefficient):")
 print(comparison_df[['WindSpeed', 'Ct_Sim', 'Ct_Ref', 'Ct_Diff_%']].to_string(index=False))
 print("\nPower [kW]:")
 print(comparison_df[['WindSpeed', 'Power_Sim', 'Power_Ref', 'Power_Diff_%']].to_string(index=False))
+
+# Create plots comparing simulation and NREL reference data
+print("\n" + "="*60)
+print("GENERATING PLOTS")
+print("="*60)
+
+fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+
+# Plot 1: Power Coefficient (Cp)
+axes[0].plot(comparison_df['WindSpeed'], comparison_df['Cp_Sim'], 'o-', label='Simulation', linewidth=2, markersize=6)
+axes[0].plot(comparison_df['WindSpeed'], comparison_df['Cp_Ref'], 's--', label='NREL Reference', linewidth=2, markersize=6)
+axes[0].set_xlabel('Wind Speed [m/s]', fontsize=12)
+axes[0].set_ylabel('Cp [-]', fontsize=12)
+axes[0].set_title('Power Coefficient (Cp)', fontsize=14, fontweight='bold')
+axes[0].grid(True, alpha=0.3)
+axes[0].legend(fontsize=10)
+axes[0].set_xlim(left=0)
+axes[0].set_ylim(bottom=0)
+
+# Plot 2: Power
+axes[1].plot(comparison_df['WindSpeed'], comparison_df['Power_Sim'], 'o-', label='Simulation', linewidth=2, markersize=6)
+axes[1].plot(comparison_df['WindSpeed'], comparison_df['Power_Ref'], 's--', label='NREL Reference', linewidth=2, markersize=6)
+axes[1].set_xlabel('Wind Speed [m/s]', fontsize=12)
+axes[1].set_ylabel('Power [kW]', fontsize=12)
+axes[1].set_title('Power Output', fontsize=14, fontweight='bold')
+axes[1].grid(True, alpha=0.3)
+axes[1].legend(fontsize=10)
+axes[1].set_xlim(left=0)
+axes[1].set_ylim(bottom=0)
+
+# Plot 3: Thrust Coefficient (Ct)
+axes[2].plot(comparison_df['WindSpeed'], comparison_df['Ct_Sim'], 'o-', label='Simulation', linewidth=2, markersize=6)
+axes[2].plot(comparison_df['WindSpeed'], comparison_df['Ct_Ref'], 's--', label='NREL Reference', linewidth=2, markersize=6)
+axes[2].set_xlabel('Wind Speed [m/s]', fontsize=12)
+axes[2].set_ylabel('Ct [-]', fontsize=12)
+axes[2].set_title('Thrust Coefficient (Ct)', fontsize=14, fontweight='bold')
+axes[2].grid(True, alpha=0.3)
+axes[2].legend(fontsize=10)
+axes[2].set_xlim(left=0)
+axes[2].set_ylim(bottom=0)
+
+plt.tight_layout()
+plot_path = os.path.join(work_dir, 'performance_curves_comparison.png')
+plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+print(f"✓ Plots saved to: {plot_path}")
+plt.show()
