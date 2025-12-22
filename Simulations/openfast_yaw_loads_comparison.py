@@ -59,7 +59,7 @@ output_columns = [
 ]
 
 # Paths
-fst_path = '5MW_Land_BD_DLL_WTurb_Skewed_Loads.fst'  # Just the filename, since we'll run from the directory
+fst_path = '5MW_Land_BD_DLL_WTurb_Skewed_Loads.fst'
 sim_output_base = os.path.join(work_dir, '5MW_Land_BD_DLL_WTurb_Skewed_Loads')
 openfast_exe = '/Users/benhealy/OpenFAST/build-testing/glue-codes/openfast/openfast'
 inflow_path = '/Users/benhealy/OpenFAST/Simulations/5MW_Baseline/NRELOffshrBsline5MW_InflowWind_12mps_cp_curve.dat'
