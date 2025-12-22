@@ -21,6 +21,11 @@ param     BEMT/BEMT                   -                              INTEGER    
 param     BEMT/BEMT                   -                              INTEGER                 Skew_Mod_Active             -      1     -   "Skew model active" - 
 param     BEMT/BEMT                   -                              INTEGER                 Skew_Mod_PittPeters_Cont    -      4     -   "Pitt/Peters continuous formulation" -
 
+param     BEMT/BEMT                   -                              INTEGER                 MomCorr_None                -      0     -   "No correction for skewed inflow" -
+param     BEMT/BEMT                   -                              INTEGER                 MomCorr_Glauert             -      1     -   "Glauert correction" -
+param     BEMT/BEMT                   -                              INTEGER                 MomCorr_UMM                 -      2     -   "Unified Momentum Model (Liew et. al 2024)" -
+
+
 param     BEMT/BEMT                   -                              INTEGER                 SkewRedistrMod_None         -      0     -   "No redistribution" -
 param     BEMT/BEMT                   -                              INTEGER                 SkewRedistrMod_PittPeters   -      1     -   "Pitt/Peters/Glauert redistribution" -
 #param     BEMT/BEMT                   -                              INTEGER                 SkewRedistrMod_VCyl        -      2     -   "Vortex cylinder redistribution" -
@@ -47,7 +52,7 @@ typedef   ^                            ^                             LOGICAL    
 typedef   ^                            ^                             LOGICAL                  useTanInd                       -          -         -        "Include tangential induction in BEMT calculations [flag]"        -
 typedef   ^                            ^                             LOGICAL                  useAIDrag                       -          -         -        "Include the drag term in the axial-induction calculation?  [flag]"        -
 typedef   ^                            ^                             LOGICAL                  useTIDrag                       -          -         -        "Include the drag term in the tangential-induction calculation?  Ignored if TanInd is False.  [flag]"        -
-typedef   ^                            ^                             LOGICAL                  MomentumCorr                    -          -         -        "Momentum Correction {0=Axial Theory, 1 = Glauert Momentum Theory}"	-
+typedef   ^                            ^                             INTEGER                  MomentumCorr                    -          -         -        "Momentum Correction {0=Axial Theory, 1 = Glauert Momentum Theory, 2 = Unified Momentum Model (Liew et al. 2024)}"	-
 typedef   ^                            ^                             INTEGER                  numBladeNodes                   -          -         -        "Number of blade nodes used in the analysis"        -
 typedef   ^                            ^                             INTEGER                  numReIterations                 -          -         -        "Number of iterations for finding the Reynolds number"        -
 typedef   ^                            ^                             INTEGER                  maxIndIterations                -          -         -        "Maximum number of iterations of induction factor solve"        -
@@ -161,7 +166,7 @@ typedef   ^                            ^                             LOGICAL    
 typedef   ^                            ^                             IntKi                    DBEMT_Mod                       -             -         -        "DBEMT Model.  0 = constant tau1, 1 = time dependent tau1" -
 typedef   ^                            ^                             ReKi                     yawCorrFactor                   -             -         -        "constant used in Pitt/Peters skewed wake model (default is 15*pi/32)" -
 typedef   ^                            ^                             LOGICAL                  FixedInductions                 {:}{:}        -         -        "flag to determine if BEM inductions should be fixed and not modified by dbemt or skewed wake" -
-typedef   ^                            ^                             LOGICAL                  MomentumCorr                    -             -         -        "Momentum Correction {0=Axial Theory, 1 = Glauert Momentum Theory}"	-
+typedef   ^                            ^                             INTEGER                  MomentumCorr                    -             -         -        "Momentum Correction {0=Axial Theory, 1 = Glauert Momentum Theory, 2 = Unified Momentum Model (Liew et al. 2024)}"	-
 typedef   ^                            ^                             ReKi                     rTipFixMax                      -             -         -        "Nominally the coned rotor diameter (without prebend), used to align with Bladed calculations" m
 typedef   ^                            ^                             ReKi                     IntegrateWeight                 {:}{:}        -         -        "A weighting factor for calculating rotor-averaged values (e.g., AxInd)" -
 typedef   ^                         ParameterType                    IntKi                    lin_nx                -   0     -                                "Number of continuous states for linearization"            -
