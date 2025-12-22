@@ -257,7 +257,7 @@ subroutine BEMT_SetParameters( InitInp, p, errStat, errMsg )
       p%MomentumCorr     = InitInp%MomentumCorr
    else
       p%SkewRedistrMod   = SkewRedistrMod_None
-      p%MomentumCorr     = .false.
+      p%MomentumCorr     = MomCorr_None
    endif
    p%yawCorrFactor    = InitInp%yawCorrFactor
    p%useTipLoss       = InitInp%useTipLoss

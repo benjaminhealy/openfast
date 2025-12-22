@@ -869,12 +869,11 @@ SUBROUTINE ParsePrimaryFileInfo( PriPath, InitInp, InputFile, RootName, NumBlade
       endif
    endif
 
-
-   ! SkewMomCorr - Turn the skew momentum correction on or off [used only when SkewMod=1]
+   ! SkewMomCorr - Momentum correction mode: 0=None, 1=Glauert, 2=UMM [used only when SkewMod=1]
    call ParseVar( FileInfo_In, CurLine, "SkewMomCorr", InputFileData%SkewMomCorr, ErrStat2, ErrMsg2, UnEc )
    if (newInputMissing('SkewMomCorr', CurLine, errStat2, errMsg2)) then
-      call WrScr('         Setting SkewMomCorr to False as the input is Missing (legacy behavior).')
-      InputFileData%SkewMomCorr = .False.
+      call WrScr('         Setting SkewMomCorr to 0 (None) as the input is Missing (legacy behavior).')
+      InputFileData%SkewMomCorr = 0
    endif
 
    ! SkewRedistr_Mod - Type of skewed-wake correction model (switch) {0: no redistribution, 1=Glauert/Pitt/Peters, 2=Vortex Cylinder} [unsed only when SkewMod=1]
@@ -1394,7 +1393,7 @@ CONTAINS
       write (tmpStr,'(A20,I0)') 'SectAvgNPoints:    ', InputFileData%SA_nPerSec;       call WrScr(trim(tmpStr))
       write (tmpStr,'(A20,I0)') 'DBEMT_Mod:'         , InputFileData%DBEMT_Mod;        call WrScr(trim(tmpStr))
       write (tmpStr,'(A20,I0)') 'Skew_Mod:  '        , InputFileData%Skew_Mod;         call WrScr(trim(tmpStr))
-      write (tmpStr,'(A20,L1)') 'SkewMomCorr:'       , InputFileData%SkewMomCorr;      call WrScr(trim(tmpStr))
+      write (tmpStr,'(A20,I0)') 'SkewMomCorr:'       , InputFileData%SkewMomCorr;      call WrScr(trim(tmpStr))
       write (tmpStr,'(A20,I0)') 'SkewRedistr_Mod:'   , InputFileData%SkewRedistr_Mod;  call WrScr(trim(tmpStr))
       write (tmpStr,'(A20,L1)') 'AoA34:    '         , InputFileData%AoA34;            call WrScr(trim(tmpStr))
       write (tmpStr,'(A20,I0)') 'UA_Mod:   '         , InputFileData%UA_Init%UAMod;    call WrScr(trim(tmpStr))

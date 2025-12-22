@@ -968,7 +968,7 @@ class InputWriter_OpenFAST(object):
         f.write('{:<22d} {:<11} {:}'.format(self.fst_vt['AeroDyn']['BEM_Mod'], 'BEM_Mod', '- BEM model {1=legacy NoSweepPitchTwist, 2=polar} (switch) [used for all Wake_Mod to determine output coordinate system]\n'))
         f.write('--- Skew correction\n')
         f.write('{:<22d} {:<11} {:}'.format(self.fst_vt['AeroDyn']['Skew_Mod'], 'Skew_Mod', '- Skew model {0=No skew model, -1=Remove non-normal component for linearization, 1=skew model active}\n'))
-        f.write('{!s:<22} {:<11} {:}'.format(self.fst_vt['AeroDyn']['SkewMomCorr'], 'SkewMomCorr', '- Turn the skew momentum correction on or off [used only when Skew_Mod=1]\n'))
+        f.write('{:<22d} {:<11} {:}'.format(self.fst_vt['AeroDyn']['SkewMomCorr'], 'SkewMomCorr', '- Momentum correction method: 0=None, 1=Glauert, 2=Unified Momentum Model (Liew et al. 2024) [used only when Skew_Mod=1]\n'))
         f.write('{!s:<22} {:<11} {:}'.format(self.fst_vt['AeroDyn']['SkewRedistr_Mod'], 'SkewRedistr_Mod', '- Type of skewed-wake correction model (switch) {0=no redistribution, 1=Glauert/Pitt/Peters, default=1} [used only when Skew_Mod=1]\n'))
         f.write('{!s:<22} {:<11} {:}'.format(self.fst_vt['AeroDyn']['SkewRedistrFactor'], 'SkewRedistrFactor', '- Constant used in Pitt/Peters skewed wake model {or "default" is 15/32*pi} (-) [used only when Skew_Mod=1 and SkewRedistr_Mod=1]\n'))
         f.write('--- BEM algorithm\n')

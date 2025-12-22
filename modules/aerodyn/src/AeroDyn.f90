@@ -4543,7 +4543,7 @@ SUBROUTINE Init_BEMTmodule( InputFileData, RotInputFileData, u_AD, u, p, p_AD, x
    ! Safety
    if (InputFileData%Skew_Mod /= Skew_Mod_Active) then
       InitInp%skewRedistrMod = SkewRedistrMod_None
-      InitInp%MomentumCorr   = .False.
+      InitInp%MomentumCorr   = MomCorr_None
    endif
    ! --- Algo
    InitInp%aTol             = InputFileData%IndToler
@@ -4681,8 +4681,16 @@ SUBROUTINE Init_BEMTmodule( InputFileData, RotInputFileData, u_AD, u, p, p_AD, x
       print*,'Invalid BEM method'
       STOP
    endif
-   if (InitInp%MomentumCorr) then
-      Label = trim(Label)//', MomentumCorrection'
+   ! Updated INT logic for MomentumCorr to accomodate both Glauert and UMM methods
+   If (InitInp%MomentumCorr == MomCorr_None) then
+      Label = trim(Label)//', No skew correction'
+	elseif (InitInp%MomentumCorr == MomCorr_Glauert) then
+      Label = trim(Label)//', Glauert skew correction'
+   elseif (InitInp%MomentumCorr == MomCorr_UMM) then
+      Label = trim(Label)//', Unified Momentum Model (Liew et al 2024)'
+	else
+		print*,'Invalid skew correction method'
+      STOP
    endif
    if (p_AD%SectAvg) then
       Label = trim(Label)//', Sector Average'

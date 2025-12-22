@@ -664,19 +664,19 @@ subroutine inductionFactors0(B, r, chord, phi, cn, ct, Vx, Vy, F, wakerotation, 
 
 end subroutine inductionFactors0
 subroutine getTangentialInduction(a, cphi, sphi, Vx, F, kpCorrectionFactor, sigma_p, ct, VxCorrected, effectiveYaw, H, MomentumCorr, ap, kp)
-   real(ReKi), intent(in) :: Vx             !< velocity component [u%Vx]
-   real(ReKi), intent(in) :: F              !< hub/tip loss correction factor
-   logical,    intent(in) :: MomentumCorr   !< Include tangential induction in BEMT calculations [flag] [p%useTanInd]
-   real(ReKi), intent(in) :: ct             !< tangential force coefficient (tangential to the plane, not chord) of the jth node in the kth blade; [y%cy]
-   real(R8Ki), intent(in) :: sigma_p           ! local solidity (B*chord/(TwoPi*r))
-   real(R8Ki), intent(in) :: sphi, cphi        ! sin(phi), cos(phi)
-   real(R8Ki), intent(in) :: VxCorrected, kpCorrectionFactor
-   real(R8Ki), intent(in) :: effectiveYaw !
-   real(R8Ki), intent(in) :: H              ! scaling factor to gradually phase out tangential induction when axial induction is near 1.0
-   real(R8Ki), intent(in) :: a   ! double precision versions of output variables of similar name
-   real(R8Ki), intent(out) :: kp                ! non-dimensional parameters 
-   real(R8Ki), intent(out) :: ap   ! double precision versions of output variables of similar name
-   real(R8Ki), parameter :: InductionLimit = 1000000.0_R8Ki
+   real(ReKi),    intent(in) :: Vx             !< velocity component [u%Vx]
+   real(ReKi),    intent(in) :: F              !< hub/tip loss correction factor
+   integer(IntKi),intent(in) :: MomentumCorr   !< Include tangential induction in BEMT calculations (based on skew method) [flag] [p%useTanInd]
+   real(ReKi),    intent(in) :: ct             !< tangential force coefficient (tangential to the plane, not chord) of the jth node in the kth blade; [y%cy]
+   real(R8Ki),    intent(in) :: sigma_p           ! local solidity (B*chord/(TwoPi*r))
+   real(R8Ki),    intent(in) :: sphi, cphi        ! sin(phi), cos(phi)
+   real(R8Ki),    intent(in) :: VxCorrected, kpCorrectionFactor
+   real(R8Ki),    intent(in) :: effectiveYaw !
+   real(R8Ki),    intent(in) :: H              ! scaling factor to gradually phase out tangential induction when axial induction is near 1.0
+   real(R8Ki),    intent(in) :: a   ! double precision versions of output variables of similar name
+   real(R8Ki),    intent(out) :: kp                ! non-dimensional parameters 
+   real(R8Ki),    intent(out) :: ap   ! double precision versions of output variables of similar name
+   real(R8Ki),    parameter :: InductionLimit = 1000000.0_R8Ki
 
    ! compute tangential induction factor
    if ( EqualRealNos(cphi,0.0_R8Ki) ) then
@@ -687,7 +687,7 @@ subroutine getTangentialInduction(a, cphi, sphi, Vx, F, kpCorrectionFactor, sigm
    else
       !H = smoothStep( real(a,ReKi), 0.8, 1.0, 1.0, 0.0 ) + smoothStep( real(a,ReKi), 1.0, 0.0, 1.2, 1.0 )
       !kp = sigma_p*( cl*sphi - H*cd*cphi )/( 4.0*F*sphi*cphi )*kpCorrectionFactor
-      if (MomentumCorr) then             
+      if (MomentumCorr == MomCorr_Glauert .or. MomentumCorr == MomCorr_UMM) then             
           if (equalrealnos(a,1.0_R8Ki)) then
               kp = 0.0_R8Ki !H*sigma_p*ct/( 4.0*F*sphi*cphi )*(kpCorrectionFactor)
           else
@@ -717,28 +717,28 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
    implicit none
 
    ! in
-   integer,    intent(in) :: BEM_Mod
-   integer,    intent(in) :: B              !< number of blades [p%numBlades]
-   real(ReKi), intent(in) :: r              !< local radial position [u%rlocal]
-   real(ReKi), intent(in) :: chord          !< chord [p%chord]
-   real(ReKi), intent(in) :: phi            !< angle between the plane of rotation and the direction of the local wind [y%phi]; must be in range [-pi,pi]
-   real(ReKi), intent(in) :: cn             !< normal force coefficient (normal to the plane, not chord) of the jth node in the kth blade; [y%cx]
-   real(ReKi), intent(in) :: ct             !< tangential force coefficient (tangential to the plane, not chord) of the jth node in the kth blade; [y%cy]
-   real(ReKi), intent(in) :: Vx             !< velocity component [u%Vx]
-   real(ReKi), intent(in) :: Vy             !< velocity component [u%Vy]
-   real(ReKi), intent(in) :: drdz, cantAngle
-   real(ReKi), intent(in) :: F              !< hub/tip loss correction factor
-   real(ReKi), intent(in) :: CHI0              !< Yaw 
-   logical,    intent(in) :: wakerotation   !< Include tangential induction in BEMT calculations [flag] [p%useTanInd]
-   logical,    intent(in) :: MomentumCorr   !< Include tangential induction in BEMT calculations [flag] [p%useTanInd]
-   real(ReKi), intent(in) :: xVelCorr       
+   integer,       intent(in) :: BEM_Mod
+   integer,       intent(in) :: B              !< number of blades [p%numBlades]
+   real(ReKi),    intent(in) :: r              !< local radial position [u%rlocal]
+   real(ReKi),    intent(in) :: chord          !< chord [p%chord]
+   real(ReKi),    intent(in) :: phi            !< angle between the plane of rotation and the direction of the local wind [y%phi]; must be in range [-pi,pi]
+   real(ReKi),    intent(in) :: cn             !< normal force coefficient (normal to the plane, not chord) of the jth node in the kth blade; [y%cx]
+   real(ReKi),    intent(in) :: ct             !< tangential force coefficient (tangential to the plane, not chord) of the jth node in the kth blade; [y%cy]
+   real(ReKi),    intent(in) :: Vx             !< velocity component [u%Vx]
+   real(ReKi),    intent(in) :: Vy             !< velocity component [u%Vy]
+   real(ReKi),    intent(in) :: drdz, cantAngle
+   real(ReKi),    intent(in) :: F              !< hub/tip loss correction factor
+   real(ReKi),    intent(in) :: CHI0           !< Yaw 
+   logical,       intent(in) :: wakerotation   !< Include tangential induction in BEMT calculations [flag] [p%useTanInd]
+   integer(IntKi),intent(in) :: MomentumCorr   !< Skew correction for momentum calculations [flag] (determines axial and tangential calculations) [p%useTanInd]
+   real(ReKi),    intent(in) :: xVelCorr       
    ! out
-   real(ReKi), intent(out) :: fzero_out     !< residual of BEM equations
-   real(ReKi), intent(out) :: a_out         !< axial induction [y%axInduction]
-   real(ReKi), intent(out) :: ap_out        !< tangential induction, i.e., a-prime [y%tanInduction]
-   logical,    intent(out) :: IsValidSolution !< this is set to false if k<=1 in the propeller brake region or k<-1 in the momentum region, indicating an invalid solution
-   real(ReKi), intent(out) :: k_out
-   real(ReKi), intent(out) :: kp_out
+   real(ReKi),    intent(out) :: fzero_out     !< residual of BEM equations
+   real(ReKi),    intent(out) :: a_out         !< axial induction [y%axInduction]
+   real(ReKi),    intent(out) :: ap_out        !< tangential induction, i.e., a-prime [y%tanInduction]
+   logical,       intent(out) :: IsValidSolution !< this is set to false if k<=1 in the propeller brake region or k<-1 in the momentum region, indicating an invalid solution
+   real(ReKi),    intent(out) :: k_out
+   real(ReKi),    intent(out) :: kp_out
    
    ! local variables
    ! NOTE!!!  Double precision is used here to help the numerics which become
@@ -790,7 +790,8 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
 
    ac = ac_val(effectiveYaw)
    k0 = ac / (1.0_R8Ki-ac)
-   if (.not.MomentumCorr) then 
+   if (MomentumCorr == MomCorr_None) then 
+      ! Simple momentum theory neglecting skewed inflow
        if (k <= k0 ) then
            if (VxCorrected > 0.0) then
                a = k/(k+1.0)
@@ -799,12 +800,16 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
            end if
            H = 1.0_R8Ki
        else
-           call axialInductionFromEmpiricalThrust( effectiveYaw, phi, k, F, a, H, skewConvention=MomentumCorr, quarticVersion=MomentumCorr )
+           call axialInductionFromEmpiricalThrust( effectiveYaw, phi, k, F, a, H, skewConvention=.false., quarticVersion=.false. )
        endif
-   else       
-      ! --- Using convention of axial induction where "a" is "an" (Wn = -an Un)
+   elseif (MomentumCorr == MomCorr_Glauert) then       
+      ! --- Using Glauert correction to compute axial induction under skewed inflow where "a" is "an" (Wn = -an Un)
        call axialInductionFromGlauertMomentum(effectiveYaw, phi, k, F, a, H) 
        a = sign(a,k)
+   elseif (MomentumCorr == MomCorr_UMM) then
+      ! --- Using the Unified Momentum Model (Liew et al 2024) to compute axial induction under skewed inflow where "a" is "an" (Wn = -an Un)
+      call axialInductionFromUnifiedMomentum(effectiveYaw, phi, k, F, a, H) 
+      a = sign(a,k) ! BCH (TODO): ADD WAKE PRESSURE OUTPUT
    endif
 
    
@@ -829,7 +834,7 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
    elseif (EqualRealNos(ap,-1.0_R8Ki)) then
        fzero = sphi/(1.0_R8Ki-a)
    else
-       if (momentumCorr) then
+       if (momentumCorr /= MomCorr_None) then
            fzero = sphi/(1.0_R8Ki-a) - VxCorrected/Vy*cphi/(1.0_R8Ki+ap)!sphi*Vy(1.0_R8Ki+ap) - cphi*(1.0_R8Ki-a)*VxCorrected  !sphi*Vy*(1.0_R8Ki+ap) - cphi*VxCorrected*(1.0_R8Ki-a)!cphi/(1.0_R8Ki+ap)*(1.0_R8Ki-a)-sphi*Vy/VxCorrected 
        else
            fzero = sphi/(1.0_R8Ki-a) - VxCorrected/Vy*cphi/(1.0_R8Ki+ap)
@@ -1026,6 +1031,110 @@ subroutine axialInductionFromGlauertMomentum(chi0, phi, k, F, axInd, H)
       call axialInductionFromEmpiricalThrust( chi0, phi, k, F, axInd, H, skewConvention=.true., quarticVersion=.true. )           
    endif  
 end subroutine axialInductionFromGlauertMomentum
+
+! BCH (TODO): UPDATE SUBROUTINE AND COMMENTS ABOVE FOR UMM
+!> Solve for `a` using system of equations:
+!!  - blade element theory (BET) (eq. 1) and
+!!  - unified momentum theory (UMM) formulas (eq. 2-7)
+!!  
+!!  - No empirical corrections are applied in high thrust regimes, so there is no need to check k_c (Liew et al 2024)
+!!
+!!
+!! BET:
+!! CT= 4 F (1-a)^2 k                         (1)
+!!
+!! UMM: 
+!! ADD EQUATION HERE                         (2)
+!! ADD EQUATION HERE                         (3)
+!! ADD EQUATION HERE                         (4)
+!! ADD EQUATION HERE                         (5)
+!! ADD EQUATION HERE                         (6)
+!! ADD EQUATION HERE                         (7)
+!!
+!! Unlike the Glauert and HT empirical equations, the UMM formulas do not reduce to a nice polynomial w.r.t. an
+!! Thus, fixed-point iteration can be used to solve the system of eq. for Ct and an iteratively
+!!
+!! NOTE: UMM solves induction as a function of thrust and pressure, the latter of which must be calculated/tabulated below
+!!
+!! NOTE: FIRST TESTING COPY OF AXIALINDUCTIONFROMGLAUERTMOMENTUM SUBROUTINE TO CHECK NEW FLAGGING/LOGIC FOR UMM CLACULATIONS
+!!       THIS SUBROUTINE WILL BE UPDATED WITH THE UMM SOLUTION ONCE THE SURROUNDING CODEBASE HAS BEEN ADAPTED
+subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H)
+   implicit none
+   real(R8Ki), intent(in) :: chi0                     !< Skew angle [rad]
+   real(R8Ki), intent(in) :: k                        !< core BEMT thrust parameter (Ct = 4Fk(1-a)^2) --> k(blade solidity, aerodynamic forces, blade deflections/orientation (dr/dz), skew angle)
+   real(ReKi), intent(in) :: F                        !< tip loss factor
+   real(ReKi), intent(in) :: phi                      !< BEMT airfoil inflow angle
+   real(R8Ki), intent(out):: axInd                    !< Axial induction factor
+   ! -------------------------------------------------------------------------------------------------------------
+   ! BCH (TODO): REMOVE/UPDATE AFTER UMM IMPLEMENTATION
+   real(R8Ki), intent(out):: H                        ! scaling factor to gradually phase out tangential induction when axial induction is near 1.0
+   real(R8Ki)             :: c11, c12, coeffs(5)
+   complex(R8Ki)          :: roots(4)
+   real(R8Ki)             :: ac                       !< Critical value of the axial induction above which the high-thrust correction is applied
+   real(R8Ki)             :: kc                       !< Critical value of the k-factor above which the high-thrust correction is applied
+   ! -------------------------------------------------------------------------------------------------------------
+   real(R8Ki)             :: tan_chi0                 !< tan(chi), i.e. tangent of skew angle
+   ! -------------------------------------------------------------------------------------------------------------
+   ! BCH (TODO): REMOVE AFTER UMM IMPLEMENTATION -- for error logging during testing
+   integer(IntKi)         :: UnLog                    !< Unit number for log file
+   integer(IntKi)         :: ErrStat
+   logical                :: FileExists
+   
+   ! ============================================
+   ! FOR IMPLEMENTATION TESTING ONLY: Write to log file to confirm execution
+   inquire(file='UMM_subroutine_logic.log', exist=FileExists)
+   call GetNewUnit(UnLog, ErrStat)
+   if (FileExists) then
+      open(unit=UnLog, file='UMM_subroutine_logic.log', status='old', position='append')
+   else
+      open(unit=UnLog, file='UMM_subroutine_logic.log', status='new')
+      write(UnLog,'(A)') '# UMM subroutine Check:'
+      write(UnLog,'(A)') '# Columns: chi0(deg), phi(deg), k, F, axInd'
+   endif
+   ! ============================================
+
+   tan_chi0 = min(MaxTanChi0, max(-MaxTanChi0, tan(chi0)))
+   ac = ac_val(chi0)
+   kc = ac / (1.0-ac) *sqrt(1+(tan_chi0/(1-ac))**2)
+   if (abs(k) <= kc) then
+      ! Use Glauert Skew Momentum (Equation 1&2), and solve for equation (3) above
+      c11 = tan_chi0**2
+      c12 = k**2
+      coeffs(5) = 1.0_R8Ki-c12
+      coeffs(4) = 4.0_R8Ki*c12-2.0_R8Ki
+      coeffs(3) = 1.0_R8Ki+c11 -6.0_R8Ki*c12
+      coeffs(2) = 4.0_R8Ki*c12
+      coeffs(1) = -c12
+      
+      call QuarticRoots(coeffs,roots)
+      call sortRoots(roots)
+      if (phi >= 0.0) then
+         if (real(roots(1))<0.0_R8Ki) then
+            ! Will happen when k \in [0,1], we chose the solution of a in [0,1]
+            axInd = real(roots(2))
+         else
+            axInd = real(roots(1))!min(real(roots(1)),real(roots(2)))
+         endif
+      else           
+         axInd = min(real(roots(1)),real(roots(2)))
+      endif
+      H = 1.0_R8Ki
+   ! BCH (TODO): REMOVE BELOW AFTER UMM IMPLEMENTATION
+   else !if (k > kc) then ! High induction/ empirical correction        
+      call axialInductionFromEmpiricalThrust( chi0, phi, k, F, axInd, H, skewConvention=.true., quarticVersion=.true. )           
+   endif
+
+   ! ============================================
+   ! FOR IMPLEMENTATION TESTING ONLY: Log the subroutine call in new output file
+   
+   write(UnLog,'(5(ES15.6,2x))') chi0*R2D, phi*R2D, k, F, axInd
+   close(UnLog)
+
+   ! FOR IMPLEMENTATION TESTING ONLY: Log the subroutine call in output to terminal
+   call WrScr('*** UMM SUBROUTINE CALLED SUCCESSFULLY: k='//trim(Num2LStr(real(k,ReKi)))// &
+              ', a='//trim(Num2LStr(real(axInd,ReKi)))//' ***')
+   ! ============================================
+end subroutine axialInductionFromUnifiedMomentum
 
 !> Compute the coefficients of a second order polynomial that extends the Momenutm relationship CT(a) 
 !! above a value a>ac. The continuation is done such that the slope and value at a=a_c match 
