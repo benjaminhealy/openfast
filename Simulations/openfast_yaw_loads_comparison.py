@@ -172,13 +172,13 @@ def setup_initial_conditions_for_yaw(elastodyn_path, aerodyn_path, wind_speed):
     # Enable wake redistribution for yawed flow (Pitt/Peters model)
     modify_parameter(aerodyn_path, 'SkewRedistr_Mod', '1')
 
-    print(f"  ✓ Set initial RotSpeed = {rotor_speed:.2f} rpm (TSR={target_tsr:.1f} at {wind_speed:.1f} m/s)")
-    print(f"  ✓ Set initial NacYaw = 0.0 deg (gradual yaw maneuver)")
-    print(f"  ✓ Disabled Unsteady Aerodynamics (UA_Mod = 0)")
-    print(f"  ✓ Enabled axial drag in BEMT (AIDrag = True)")
-    print(f"  ✓ Increased BEMT iterations (MaxIter = 300)")
-    print(f"  ✓ Enabled skew model (Skew_Mod = 1)")
-    print(f"  ✓ Enabled wake redistribution (SkewRedistr_Mod = 1)")
+    print(f"Set initial RotSpeed = {rotor_speed:.2f} rpm (TSR={target_tsr:.1f} at {wind_speed:.1f} m/s)")
+    print(f"Set initial NacYaw = 0.0 deg (gradual yaw maneuver)")
+    print(f"Disabled Unsteady Aerodynamics (UA_Mod = 0)")
+    print(f"Enabled axial drag in BEMT (AIDrag = True)")
+    print(f"Increased BEMT iterations (MaxIter = 300)")
+    print(f"Enabled skew model (Skew_Mod = 1)")
+    print(f"Enabled wake redistribution (SkewRedistr_Mod = 1)")
 
 
 def setup_yaw_maneuver(servodyn_path, target_yaw_angle):
@@ -207,8 +207,8 @@ def setup_yaw_maneuver(servodyn_path, target_yaw_angle):
     yaw_duration = abs(target_yaw_angle) / 2.0  # Time to complete yaw at 2 deg/s
     yaw_complete_time = 25.0 + yaw_duration
 
-    print(f"  ✓ Yaw maneuver: 0° → {target_yaw_angle:+.1f}° at 2 deg/s")
-    print(f"  ✓ Maneuver starts at t=25s, completes at t={yaw_complete_time:.1f}s")
+    print(f"Yaw maneuver: 0° → {target_yaw_angle:+.1f}° at 2 deg/s")
+    print(f"Maneuver starts at t=25s, completes at t={yaw_complete_time:.1f}s")
 
     return yaw_complete_time
 
@@ -518,7 +518,7 @@ def create_heatmaps(results_df, skew_corr_label, output_folder):
     plt.savefig(combined_filename, dpi=150, bbox_inches='tight')
     plt.close()
 
-    print(f"  ✓ Saved combined heatmap: {combined_filename}")
+    print(f"Saved combined heatmap: {combined_filename}")
 
     # Create individual full-size heatmaps
     for var_col, var_label, var_name in heatmap_vars:
@@ -540,7 +540,7 @@ def create_heatmaps(results_df, skew_corr_label, output_folder):
             plt.savefig(individual_filename, dpi=150, bbox_inches='tight')
             plt.close()
 
-    print(f"  ✓ Saved {len(pivot_tables)} individual heatmaps")
+    print(f"Saved {len(pivot_tables)} individual heatmaps")
 
 
 # Verify all required files exist before starting
@@ -557,9 +557,9 @@ print("Checking required files...")
 missing_files = []
 for name, path in required_files.items():
     if os.path.exists(path):
-        print(f"  ✓ {name}: {path}")
+        print(f"{name}: {path}")
     else:
-        print(f"  ✗ {name}: {path} NOT FOUND")
+        print(f"  {name}: {path} NOT FOUND")
         missing_files.append(name)
 
 if missing_files:
@@ -616,7 +616,7 @@ for skew_corr in skew_corr_settings:
             # Set SkewMomCorr parameter in AeroDyn (must use True/False, not 0/1)
             skew_corr_value = 'True' if skew_corr else 'False'
             modify_parameter(aerodyn_path, 'SkewMomCorr', skew_corr_value)
-            print(f"  ✓ Set SkewMomCorr = {skew_corr_value}")
+            print(f"Set SkewMomCorr = {skew_corr_value}")
 
             for yaw in yaw_angles:
                 print(f"\n{'-'*60}")
@@ -629,16 +629,16 @@ for skew_corr in skew_corr_settings:
                 # Calculate appropriate simulation time
                 sim_time = calculate_simulation_time(yaw)
                 modify_parameter(os.path.join(work_dir, fst_path), 'TMax', f"{sim_time:.1f}")
-                print(f"  ✓ Set TMax = {sim_time:.1f}s")
+                print(f"Set TMax = {sim_time:.1f}s")
 
                 # Run OpenFAST
                 result = run_openfast(fst_path, work_dir, openfast_exe)
 
                 if result.returncode != 0:
-                    print(f"✗ ERROR: Simulation failed for yaw angle {yaw:.1f} deg")
-                    print(f"  Return code: {result.returncode}")
-                    print(f"  STDOUT (last 100 lines):\n{result.stdout[-5000:]}")
-                    print(f"  STDERR:\n{result.stderr}")
+                    print(f"ERROR: Simulation failed for yaw angle {yaw:.1f} deg")
+                    print(f"Return code: {result.returncode}")
+                    print(f"STDOUT (last 100 lines):\n{result.stdout[-5000:]}")
+                    print(f"STDERR:\n{result.stderr}")
                     continue
 
                 print(f"✓ OpenFAST completed successfully")
@@ -648,11 +648,11 @@ for skew_corr in skew_corr_settings:
 
                 # Extract and save downsampled timeseries CSV
                 df_timeseries = process_and_save_timeseries(output_file, yaw, ws, timeseries_folder, max_rows=600)
-                print(f"  ✓ Saved timeseries CSV ({len(df_timeseries)} rows)")
+                print(f"Saved timeseries CSV ({len(df_timeseries)} rows)")
 
                 # Create timeseries subplot
                 plot_timeseries(df_timeseries, yaw, ws, timeseries_folder)
-                print(f"  ✓ Saved timeseries plot")
+                print(f"Saved timeseries plot")
 
                 # Extract steady-state values from output file
                 ss_values = extract_steady_state_values(output_file, columns=output_columns)
@@ -665,21 +665,19 @@ for skew_corr in skew_corr_settings:
                 # Delete large .out file to save space
                 if os.path.exists(output_file):
                     os.remove(output_file)
-                    print(f"  ✓ Deleted .out file (saved space)")
+                    print(f"Deleted .out file (saved space)")
 
-                print(f"✓ Completed simulation: ws={ws} m/s, yaw={yaw:+.1f}°")
+                print(f"Completed simulation: ws={ws} m/s, yaw={yaw:+.1f}°")
 
     except Exception as e:
-        print(f"\n✗ FATAL ERROR during SkewMomCorr={skew_corr_label} simulations:")
+        print(f"\nFATAL ERROR during SkewMomCorr={skew_corr_label} simulations:")
         print(f"  {str(e)}")
         import traceback
         traceback.print_exc()
 
     finally:
         # Create summary DataFrame and save
-        print(f"\n{'='*80}")
         print(f"GENERATING OUTPUTS FOR REV2 (SKEW_MOD=1, SKEWMOMCORR={skew_corr_label.upper()})")
-        print(f"{'='*80}")
 
         if len(steady_state_results) > 0:
             results_df = pd.DataFrame(steady_state_results)
@@ -695,7 +693,7 @@ for skew_corr in skew_corr_settings:
             heatmap_label = f'rev2_skewcorr_{skew_corr_label}'
             create_heatmaps(results_df, heatmap_label, heatmaps_folder)
         else:
-            print(f"\n✗ No successful simulations for Rev2 (Skew_Mod=1, SkewMomCorr={skew_corr_label})")
+            print(f"\nNo successful simulations for Rev2 (Skew_Mod=1, SkewMomCorr={skew_corr_label})")
 
 # Restore original backup files
 print(f"\n{'='*80}")
