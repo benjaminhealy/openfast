@@ -1,0 +1,2 @@
+/usr/bin/ar qc libawaelib.a CMakeFiles/awaelib.dir/src/AWAE.f90.o CMakeFiles/awaelib.dir/src/AWAE_IO.f90.o CMakeFiles/awaelib.dir/src/AWAE_Types.f90.o
+/usr/bin/ranlib libawaelib.a

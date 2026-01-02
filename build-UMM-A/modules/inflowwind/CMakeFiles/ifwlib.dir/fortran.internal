@@ -1,0 +1,11 @@
+# The fortran modules provided by this target.
+provides
+ ifw_flowfield.mod
+ ifw_flowfield_types.mod
+ inflowwind.mod
+ inflowwind_io.mod
+ inflowwind_io_types.mod
+ inflowwind_subs.mod
+ inflowwind_types.mod
+ lidar.mod
+ lidar_types.mod

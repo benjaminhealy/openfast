@@ -1,0 +1,2 @@
+/usr/bin/ar qc libfeamlib.a CMakeFiles/feamlib.dir/src/FEAM.f90.o CMakeFiles/feamlib.dir/src/FEAMooring_Types.f90.o
+/usr/bin/ranlib libfeamlib.a

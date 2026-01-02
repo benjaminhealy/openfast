@@ -1,0 +1,2 @@
+/usr/bin/ar qc libadilib.a CMakeFiles/adilib.dir/src/AeroDyn_Inflow.f90.o CMakeFiles/adilib.dir/src/AeroDyn_Inflow_Types.f90.o
+/usr/bin/ranlib libadilib.a

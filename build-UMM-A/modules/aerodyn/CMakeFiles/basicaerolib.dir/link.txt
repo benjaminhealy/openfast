@@ -1,0 +1,2 @@
+/usr/bin/ar qc libbasicaerolib.a CMakeFiles/basicaerolib.dir/src/UnsteadyAero.f90.o CMakeFiles/basicaerolib.dir/src/UnsteadyAero_Types.f90.o CMakeFiles/basicaerolib.dir/src/AirfoilInfo.f90.o CMakeFiles/basicaerolib.dir/src/AirfoilInfo_Types.f90.o
+/usr/bin/ranlib libbasicaerolib.a

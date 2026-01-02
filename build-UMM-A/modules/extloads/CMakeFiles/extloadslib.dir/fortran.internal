@@ -1,0 +1,5 @@
+# The fortran modules provided by this target.
+provides
+ extloads.mod
+ extloads_types.mod
+ extloadsdx_types.mod

@@ -1,0 +1,2 @@
+/usr/bin/ar qc libifwlib.a CMakeFiles/ifwlib.dir/src/IfW_FlowField_Types.f90.o CMakeFiles/ifwlib.dir/src/IfW_FlowField.f90.o CMakeFiles/ifwlib.dir/src/InflowWind_IO_Types.f90.o CMakeFiles/ifwlib.dir/src/InflowWind_IO.f90.o CMakeFiles/ifwlib.dir/src/InflowWind_Subs.f90.o CMakeFiles/ifwlib.dir/src/InflowWind_Types.f90.o CMakeFiles/ifwlib.dir/src/InflowWind.f90.o CMakeFiles/ifwlib.dir/src/Lidar_Types.f90.o CMakeFiles/ifwlib.dir/src/Lidar.f90.o
+/usr/bin/ranlib libifwlib.a

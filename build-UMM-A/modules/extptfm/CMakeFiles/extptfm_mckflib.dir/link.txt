@@ -1,0 +1,2 @@
+/usr/bin/ar qc libextptfm_mckflib.a CMakeFiles/extptfm_mckflib.dir/src/ExtPtfm_MCKF.f90.o CMakeFiles/extptfm_mckflib.dir/src/ExtPtfm_MCKF_IO.f90.o CMakeFiles/extptfm_mckflib.dir/src/ExtPtfm_MCKF_Types.f90.o
+/usr/bin/ranlib libextptfm_mckflib.a

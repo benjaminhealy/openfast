@@ -1,0 +1,2 @@
+/usr/bin/ar qc libopenfast_postlib.a CMakeFiles/openfast_postlib.dir/src/FAST_Lin.f90.o CMakeFiles/openfast_postlib.dir/src/FAST_Mods.f90.o CMakeFiles/openfast_postlib.dir/src/FAST_Subs.f90.o CMakeFiles/openfast_postlib.dir/src/FAST_Solver.f90.o CMakeFiles/openfast_postlib.dir/src/FAST_SS_Subs.f90.o CMakeFiles/openfast_postlib.dir/src/FAST_SS_Solver.f90.o
+/usr/bin/ranlib libopenfast_postlib.a
