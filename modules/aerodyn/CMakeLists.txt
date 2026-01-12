@@ -46,6 +46,8 @@ add_library(aerodynlib STATIC
   src/AeroDyn_AllBldNdOuts_IO.f90
   src/BEMT.f90
   src/DBEMT.f90
+  src/UMM_Pressure.f90 # Unified Momentum Model module referenced for an calculations
+  src/UMM_FixedPointIteration.f90 # Unified Momentum Model module referenced for an calculations
   src/BEMTUncoupled.f90
   src/mod_root1dim.f90
   src/AeroDyn_Types.f90

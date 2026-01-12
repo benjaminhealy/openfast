@@ -27,6 +27,8 @@ module BEMTUnCoupled
    use UnsteadyAero_Types
    use BEMT_Types
    use PolynomialRoots
+   use UMM_Pressure
+   use UMM_FixedPointIteration
 
 
    implicit none
@@ -38,11 +40,10 @@ module BEMTUnCoupled
    real(ReKi),     public, parameter  :: BEMT_upperBoundTSR = 2.0_ReKi 
    
    real(R8Ki),             parameter  :: MaxTanChi0   = 100.0_R8Ki         ! maximum absolute value allowed for tan(chi0), an arbitary large number
-   
-   !1e-6 works for double precision, but not single precision 
+
+   !1e-6 works for double precision, but not single precision
    real(ReKi),     public, parameter  :: BEMT_epsilon2 = 10.0_ReKi*sqrt(epsilon(1.0_ReKi)) !this is the tolerance in radians for values around singularities in phi (i.e., phi=0 and phi=pi/2); must be large enough so that EqualRealNos(BEMT_epsilon2, 0.0_ReKi) is false
-   
-   
+
    private
    
    public :: GetRelativeVelocity
@@ -1032,108 +1033,123 @@ subroutine axialInductionFromGlauertMomentum(chi0, phi, k, F, axInd, H)
    endif  
 end subroutine axialInductionFromGlauertMomentum
 
-! BCH (TODO): UPDATE SUBROUTINE AND COMMENTS ABOVE FOR UMM
-!> Solve for `a` using system of equations:
-!!  - blade element theory (BET) (eq. 1) and
-!!  - unified momentum theory (UMM) formulas (eq. 2-7)
-!!  
-!!  - No empirical corrections are applied in high thrust regimes, so there is no need to check k_c (Liew et al 2024)
+!> Solve for axial induction `a` using the Unified Momentum Model (UMM)
+!! Reference: Liew et al. 2024 - https://www.nature.com/articles/s41467-024-50756-5
+!! Python implementation: UnifiedMomentumModel/Momentum.py (ThrustBasedUnified class)
 !!
+!! The UMM solves a system of 6 coupled nonlinear equations using fixed-point iteration:
+!!   Eq 1: Rotor-normal induction (an)
+!!   Eq 2: Streamwise outlet velocity (u4)
+!!   Eq 3: Lateral outlet velocity (v4)
+!!   Eq 4: Near-wake length (x0)
+!!   Eq 5: Outlet pressure drop (dp)
+!!   Eq 6: CT-Ctprime relationship (bridges BEM k to UMM Ctprime)
 !!
-!! BET:
-!! CT= 4 F (1-a)^2 k                         (1)
+!! Input: k = thrust parameter from BEM (CT = 4*F*k*(1-an)^2)
+!! Output: axInd = axial induction factor (an from UMM solution)
+!!         H = 1.0 (tangential induction scaling, not modified by UMM)
 !!
-!! UMM: 
-!! ADD EQUATION HERE                         (2)
-!! ADD EQUATION HERE                         (3)
-!! ADD EQUATION HERE                         (4)
-!! ADD EQUATION HERE                         (5)
-!! ADD EQUATION HERE                         (6)
-!! ADD EQUATION HERE                         (7)
-!!
-!! Unlike the Glauert and HT empirical equations, the UMM formulas do not reduce to a nice polynomial w.r.t. an
-!! Thus, fixed-point iteration can be used to solve the system of eq. for Ct and an iteratively
-!!
-!! NOTE: UMM solves induction as a function of thrust and pressure, the latter of which must be calculated/tabulated below
-!!
-!! NOTE: FIRST TESTING COPY OF AXIALINDUCTIONFROMGLAUERTMOMENTUM SUBROUTINE TO CHECK NEW FLAGGING/LOGIC FOR UMM CLACULATIONS
-!!       THIS SUBROUTINE WILL BE UPDATED WITH THE UMM SOLUTION ONCE THE SURROUNDING CODEBASE HAS BEEN ADAPTED
+!! NOTE: UMM is valid for all thrust regimes - no kc checking needed within this subroutine
 subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H)
    implicit none
-   real(R8Ki), intent(in) :: chi0                     !< Skew angle [rad]
-   real(R8Ki), intent(in) :: k                        !< core BEMT thrust parameter (Ct = 4Fk(1-a)^2) --> k(blade solidity, aerodynamic forces, blade deflections/orientation (dr/dz), skew angle)
-   real(ReKi), intent(in) :: F                        !< tip loss factor
-   real(ReKi), intent(in) :: phi                      !< BEMT airfoil inflow angle
-   real(R8Ki), intent(out):: axInd                    !< Axial induction factor
-   ! -------------------------------------------------------------------------------------------------------------
-   ! BCH (TODO): REMOVE/UPDATE AFTER UMM IMPLEMENTATION
-   real(R8Ki), intent(out):: H                        ! scaling factor to gradually phase out tangential induction when axial induction is near 1.0
-   real(R8Ki)             :: c11, c12, coeffs(5)
-   complex(R8Ki)          :: roots(4)
-   real(R8Ki)             :: ac                       !< Critical value of the axial induction above which the high-thrust correction is applied
-   real(R8Ki)             :: kc                       !< Critical value of the k-factor above which the high-thrust correction is applied
-   ! -------------------------------------------------------------------------------------------------------------
-   real(R8Ki)             :: tan_chi0                 !< tan(chi), i.e. tangent of skew angle
-   ! -------------------------------------------------------------------------------------------------------------
-   ! BCH (TODO): REMOVE AFTER UMM IMPLEMENTATION -- for error logging during testing
-   integer(IntKi)         :: UnLog                    !< Unit number for log file
-   integer(IntKi)         :: ErrStat
-   logical                :: FileExists
-   
-   ! ============================================
-   ! FOR IMPLEMENTATION TESTING ONLY: Write to log file to confirm execution
-   inquire(file='UMM_subroutine_logic.log', exist=FileExists)
-   call GetNewUnit(UnLog, ErrStat)
-   if (FileExists) then
-      open(unit=UnLog, file='UMM_subroutine_logic.log', status='old', position='append')
-   else
-      open(unit=UnLog, file='UMM_subroutine_logic.log', status='new')
-      write(UnLog,'(A)') '# UMM subroutine Check:'
-      write(UnLog,'(A)') '# Columns: chi0(deg), phi(deg), k, F, axInd'
-   endif
-   ! ============================================
+   real(R8Ki), intent(in) :: chi0                     !< Skew/yaw angle [rad] (effective yaw)
+   real(R8Ki), intent(in) :: k                        !< Thrust parameter from BEM: k = sigma_p*Cn/(4*F*sin^2(phi))
+   real(ReKi), intent(in) :: F                        !< Tip/hub loss factor
+   real(ReKi), intent(in) :: phi                      !< BEMT airfoil inflow angle (kept for interface compatibility)
+   real(R8Ki), intent(out):: axInd                    !< Axial induction factor (output)
+   real(R8Ki), intent(out):: H                        !< Tangential induction scaling (set to 1.0 for UMM)
 
-   tan_chi0 = min(MaxTanChi0, max(-MaxTanChi0, tan(chi0)))
-   ac = ac_val(chi0)
-   kc = ac / (1.0-ac) *sqrt(1+(tan_chi0/(1-ac))**2)
-   if (abs(k) <= kc) then
-      ! Use Glauert Skew Momentum (Equation 1&2), and solve for equation (3) above
-      c11 = tan_chi0**2
-      c12 = k**2
-      coeffs(5) = 1.0_R8Ki-c12
-      coeffs(4) = 4.0_R8Ki*c12-2.0_R8Ki
-      coeffs(3) = 1.0_R8Ki+c11 -6.0_R8Ki*c12
-      coeffs(2) = 4.0_R8Ki*c12
-      coeffs(1) = -c12
-      
-      call QuarticRoots(coeffs,roots)
-      call sortRoots(roots)
-      if (phi >= 0.0) then
-         if (real(roots(1))<0.0_R8Ki) then
-            ! Will happen when k \in [0,1], we chose the solution of a in [0,1]
-            axInd = real(roots(2))
-         else
-            axInd = real(roots(1))!min(real(roots(1)),real(roots(2)))
-         endif
-      else           
-         axInd = min(real(roots(1)),real(roots(2)))
-      endif
+   ! Local variables for UMM iteration
+   real(R8Ki) :: state(6)                             !< State vector: (an, u4, v4, x0, dp, Ctprime)
+   real(R8Ki) :: residuals(6)                         !< Residual vector
+   real(R8Ki) :: max_resid                            !< Maximum absolute residual
+   integer(IntKi) :: iter                             !< Iteration counter
+   logical :: converged                               !< Convergence flag
+
+   ! Debug logging variables
+   integer(IntKi) :: UnLog                            !< Unit number for log file
+   integer(IntKi) :: ErrStat
+   logical :: FileExists
+   character(256) :: LogFileName
+
+   ! Handle special case: zero or near-zero thrust
+   if (abs(k) < 1.0e-10_R8Ki) then
+      axInd = 0.0_R8Ki
       H = 1.0_R8Ki
-   ! BCH (TODO): REMOVE BELOW AFTER UMM IMPLEMENTATION
-   else !if (k > kc) then ! High induction/ empirical correction        
-      call axialInductionFromEmpiricalThrust( chi0, phi, k, F, axInd, H, skewConvention=.true., quarticVersion=.true. )           
+      return
    endif
 
-   ! ============================================
-   ! FOR IMPLEMENTATION TESTING ONLY: Log the subroutine call in new output file
-   
-   write(UnLog,'(5(ES15.6,2x))') chi0*R2D, phi*R2D, k, F, axInd
-   close(UnLog)
+   !---------------------------------------------------------------------------
+   ! Initialize state vector using ThrustBasedUnified approach
+   ! State = (an, u4, v4, x0, dp, Ctprime)
+   !---------------------------------------------------------------------------
+   call getUMMInitialGuess(k, F, chi0, state)
 
-   ! FOR IMPLEMENTATION TESTING ONLY: Log the subroutine call in output to terminal
-   call WrScr('*** UMM SUBROUTINE CALLED SUCCESSFULLY: k='//trim(Num2LStr(real(k,ReKi)))// &
-              ', a='//trim(Num2LStr(real(axInd,ReKi)))//' ***')
-   ! ============================================
+   !---------------------------------------------------------------------------
+   ! Fixed-point iteration loop
+   ! Reference: Python ThrustBasedUnified uses max 10000 iterations, tol=1e-5, relax=0.4
+   !---------------------------------------------------------------------------
+   converged = .false.
+   do iter = 1, UMM_MAX_ITER
+
+      ! Compute residuals for all 6 equations
+      call computeUMMResiduals6(state, k, F, chi0, residuals)
+
+      ! Check convergence
+      max_resid = maxval(abs(residuals))
+      if (max_resid < UMM_TOLERANCE) then
+         converged = .true.
+         exit
+      endif
+
+      ! Update state with relaxation
+      state = state + UMM_RELAXATION * residuals
+
+      ! Apply bounds to prevent divergence
+      state(1) = max(-0.5_R8Ki, min(state(1), 1.5_R8Ki))    ! an: bounded
+      state(2) = max(-2.0_R8Ki, min(state(2), 2.0_R8Ki))    ! u4: bounded
+      state(3) = max(-2.0_R8Ki, min(state(3), 2.0_R8Ki))    ! v4: bounded
+      state(4) = max(0.01_R8Ki, min(state(4), 1000.0_R8Ki)) ! x0: positive, bounded
+      state(5) = max(-2.0_R8Ki, min(state(5), 0.5_R8Ki))    ! dp: bounded
+      state(6) = max(-10.0_R8Ki, min(state(6), 100.0_R8Ki)) ! Ctprime: bounded
+
+   end do
+
+   !---------------------------------------------------------------------------
+   ! Extract outputs
+   !---------------------------------------------------------------------------
+   axInd = state(1)  ! Axial induction (an)
+   H = 1.0_R8Ki      ! UMM does not modify tangential induction scaling
+
+   ! Apply sign of k to handle negative thrust cases
+   if (k < 0.0_R8Ki) then
+      axInd = -abs(axInd)
+   endif
+
+   !---------------------------------------------------------------------------
+   ! Debug logging for non-convergence (optional)
+   !---------------------------------------------------------------------------
+   if (.not. converged) then
+      ! Log warning about non-convergence
+      LogFileName = 'UMM_subroutine_nonconverge.log'
+      inquire(file=trim(LogFileName), exist=FileExists)
+      if (FileExists) then
+         open(newunit=UnLog, file=trim(LogFileName), status='old', position='append', iostat=ErrStat)
+      else
+         open(newunit=UnLog, file=trim(LogFileName), status='new', iostat=ErrStat)
+         if (ErrStat == 0) then
+            write(UnLog, '(A)') '# UMM Non-Convergence Log'
+            write(UnLog, '(A)') '# iter, max_resid, k, F, chi0, an, u4, v4, x0, dp, Ctprime'
+         endif
+      endif
+      if (ErrStat == 0) then
+         write(UnLog, '(I6,A,ES12.4,A,ES12.4,A,ES12.4,A,ES12.4,A,6(ES12.4,A))') &
+            iter, ',', max_resid, ',', k, ',', real(F,R8Ki), ',', chi0, ',', &
+            state(1), ',', state(2), ',', state(3), ',', state(4), ',', state(5), ',', state(6), ''
+         close(UnLog)
+      endif
+   endif
+
 end subroutine axialInductionFromUnifiedMomentum
 
 !> Compute the coefficients of a second order polynomial that extends the Momenutm relationship CT(a) 
