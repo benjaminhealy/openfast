@@ -1,2 +1,0 @@
-/usr/bin/ar qc libmoordynlib.a CMakeFiles/moordynlib.dir/src/MoorDyn.f90.o CMakeFiles/moordynlib.dir/src/MoorDyn_Body.f90.o CMakeFiles/moordynlib.dir/src/MoorDyn_IO.f90.o CMakeFiles/moordynlib.dir/src/MoorDyn_Line.f90.o CMakeFiles/moordynlib.dir/src/MoorDyn_Misc.f90.o CMakeFiles/moordynlib.dir/src/MoorDyn_Point.f90.o CMakeFiles/moordynlib.dir/src/MoorDyn_Rod.f90.o CMakeFiles/moordynlib.dir/src/MoorDyn_Types.f90.o
-/usr/bin/ranlib libmoordynlib.a

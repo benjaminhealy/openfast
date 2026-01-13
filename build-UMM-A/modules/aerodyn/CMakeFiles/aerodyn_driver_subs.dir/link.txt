@@ -1,2 +1,0 @@
-/usr/bin/ar qc libaerodyn_driver_subs.a CMakeFiles/aerodyn_driver_subs.dir/src/AeroDyn_Driver_Subs.f90.o CMakeFiles/aerodyn_driver_subs.dir/src/AeroDyn_Driver_Types.f90.o
-/usr/bin/ranlib libaerodyn_driver_subs.a

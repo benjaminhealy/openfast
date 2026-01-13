@@ -1,2 +1,0 @@
-/usr/bin/ar qc libextinflowtypeslib.a CMakeFiles/extinflowtypeslib.dir/src/ExternalInflow_Types.f90.o
-/usr/bin/ranlib libextinflowtypeslib.a

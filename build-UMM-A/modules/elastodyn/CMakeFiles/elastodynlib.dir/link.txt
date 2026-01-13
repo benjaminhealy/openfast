@@ -1,2 +1,0 @@
-/usr/bin/ar qc libelastodynlib.a CMakeFiles/elastodynlib.dir/src/ElastoDyn.f90.o CMakeFiles/elastodynlib.dir/src/ElastoDyn_IO.f90.o CMakeFiles/elastodynlib.dir/src/ElastoDyn_AllBldNdOuts_IO.f90.o CMakeFiles/elastodynlib.dir/src/ED_UserSubs.f90.o CMakeFiles/elastodynlib.dir/src/ElastoDyn_Types.f90.o
-/usr/bin/ranlib libelastodynlib.a

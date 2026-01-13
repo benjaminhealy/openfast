@@ -1,3 +1,0 @@
-# The fortran modules provided by this target.
-provides
- aerodyn_inflow_c_binding.mod

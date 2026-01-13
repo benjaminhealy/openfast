@@ -1,2 +1,0 @@
-/usr/bin/ar qc libextloadslib.a CMakeFiles/extloadslib.dir/src/ExtLoads.f90.o CMakeFiles/extloadslib.dir/src/ExtLoads_Types.f90.o CMakeFiles/extloadslib.dir/src/ExtLoadsDX_Types.f90.o
-/usr/bin/ranlib libextloadslib.a

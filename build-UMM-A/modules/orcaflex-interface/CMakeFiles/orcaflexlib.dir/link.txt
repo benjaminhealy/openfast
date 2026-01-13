@@ -1,2 +1,0 @@
-/usr/bin/ar qc liborcaflexlib.a CMakeFiles/orcaflexlib.dir/src/OrcaFlexInterface.f90.o CMakeFiles/orcaflexlib.dir/src/OrcaFlexInterface_Types.f90.o
-/usr/bin/ranlib liborcaflexlib.a

@@ -1,2 +1,0 @@
-/usr/bin/ar qc libsubdynlib.a CMakeFiles/subdynlib.dir/src/SubDyn.f90.o CMakeFiles/subdynlib.dir/src/FEM.f90.o CMakeFiles/subdynlib.dir/src/SD_FEM.f90.o CMakeFiles/subdynlib.dir/src/SubDyn_Output.f90.o CMakeFiles/subdynlib.dir/src/SubDyn_Output_Params.f90.o CMakeFiles/subdynlib.dir/src/SubDyn_Tests.f90.o CMakeFiles/subdynlib.dir/src/IntegerList.f90.o CMakeFiles/subdynlib.dir/src/SubDyn_Types.f90.o
-/usr/bin/ranlib libsubdynlib.a

@@ -1,4 +1,0 @@
-# The fortran modules provided by this target.
-provides
- aerodisk_driver_subs.mod
- aerodisk_driver_types.mod

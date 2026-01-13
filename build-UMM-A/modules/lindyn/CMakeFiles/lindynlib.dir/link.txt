@@ -1,2 +1,0 @@
-/usr/bin/ar qc liblindynlib.a CMakeFiles/lindynlib.dir/src/LinDyn.f90.o CMakeFiles/lindynlib.dir/src/LinDyn_Types.f90.o
-/usr/bin/ranlib liblindynlib.a

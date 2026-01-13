@@ -1,6 +1,0 @@
-# The fortran modules provided by this target.
-provides
- aerodisk.mod
- aerodisk_io.mod
- aerodisk_output_params.mod
- aerodisk_types.mod

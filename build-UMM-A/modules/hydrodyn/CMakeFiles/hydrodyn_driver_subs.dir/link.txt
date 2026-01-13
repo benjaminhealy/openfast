@@ -1,2 +1,0 @@
-/usr/bin/ar qc libhydrodyn_driver_subs.a CMakeFiles/hydrodyn_driver_subs.dir/src/HydroDyn_DriverSubs.f90.o
-/usr/bin/ranlib libhydrodyn_driver_subs.a

@@ -1,2 +1,0 @@
-/usr/bin/ar qc libopenfast_prelib.a CMakeFiles/openfast_prelib.dir/src/FAST_Types.f90.o
-/usr/bin/ranlib libopenfast_prelib.a

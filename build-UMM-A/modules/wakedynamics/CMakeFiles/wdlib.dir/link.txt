@@ -1,2 +1,0 @@
-/usr/bin/ar qc libwdlib.a CMakeFiles/wdlib.dir/src/WakeDynamics.f90.o CMakeFiles/wdlib.dir/src/WakeDynamics_Types.f90.o
-/usr/bin/ranlib libwdlib.a

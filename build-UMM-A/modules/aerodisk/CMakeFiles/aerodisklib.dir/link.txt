@@ -1,2 +1,0 @@
-/usr/bin/ar qc libaerodisklib.a CMakeFiles/aerodisklib.dir/src/AeroDisk_Types.f90.o CMakeFiles/aerodisklib.dir/src/AeroDisk_Output_Params.f90.o CMakeFiles/aerodisklib.dir/src/AeroDisk_IO.f90.o CMakeFiles/aerodisklib.dir/src/AeroDisk.f90.o
-/usr/bin/ranlib libaerodisklib.a

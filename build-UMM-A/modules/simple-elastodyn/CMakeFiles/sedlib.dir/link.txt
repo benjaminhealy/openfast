@@ -1,2 +1,0 @@
-/usr/bin/ar qc libsedlib.a CMakeFiles/sedlib.dir/src/SED_Types.f90.o CMakeFiles/sedlib.dir/src/SED_Output_Params.f90.o CMakeFiles/sedlib.dir/src/SED_IO.f90.o CMakeFiles/sedlib.dir/src/SED.f90.o
-/usr/bin/ranlib libsedlib.a
