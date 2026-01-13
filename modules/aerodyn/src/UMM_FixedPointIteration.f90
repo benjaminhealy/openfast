@@ -238,7 +238,7 @@ contains
       !
       ! Handle CT=0 and CT < 0 scenario and avoid numerical instability and enforce turbine behavior
       if (abs(k) < 1.0e-10_R8Ki) then
-         CT_init = 0
+         CT_init = 0.0_R8Ki
       else
          CT_init = 4.0_R8Ki * real(F, R8Ki) * k * (1.0_R8Ki - 1.0_R8Ki/3.0_R8Ki)**2
       endif
