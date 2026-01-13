@@ -1034,33 +1034,33 @@ subroutine axialInductionFromGlauertMomentum(chi0, phi, k, F, axInd, H)
 end subroutine axialInductionFromGlauertMomentum
 
 !> Solve for axial induction `a` using the Unified Momentum Model (UMM)
-!! Reference: Liew et al. 2024 - https://www.nature.com/articles/s41467-024-50756-5
-!! Python implementation: UnifiedMomentumModel/Momentum.py (ThrustBasedUnified class)
+!! Reference paper: Liew et al. 2024 - https://www.nature.com/articles/s41467-024-50756-5
+!! Referebce Python implementation: https://github.com/Howland-Lab/Unified-Momentum-Model/blob/main/UnifiedMomentumModel/Momentum.py (ThrustBasedUnified)
 !!
-!! The UMM solves a system of 6 coupled nonlinear equations using fixed-point iteration:
+!! Call UMM_FixedPointIteration.f90 to solve system of 6 nonlinear UMM equations using fixed-point iteration:
 !!   Eq 1: Rotor-normal induction (an)
 !!   Eq 2: Streamwise outlet velocity (u4)
 !!   Eq 3: Lateral outlet velocity (v4)
 !!   Eq 4: Near-wake length (x0)
 !!   Eq 5: Outlet pressure drop (dp)
-!!   Eq 6: CT-Ctprime relationship (bridges BEM k to UMM Ctprime)
+!!   Eq 6: CT-Ctprime relationship that bridges BEM k to UMM Ctprime
 !!
-!! Input: k = thrust parameter from BEM (CT = 4*F*k*(1-an)^2)
-!! Output: axInd = axial induction factor (an from UMM solution)
-!!         H = 1.0 (tangential induction scaling, not modified by UMM)
+!! Input: k = thrust parameter from current BEM solution in OpenFAST (CT = 4*F*k*(1-an)^2)
+!! Output: axInd = axial induction factor (an pulled from UMM solution)
+!!         H = 1.0 (tangential induction factor, not modified by UMM)
 !!
-!! NOTE: UMM is valid for all thrust regimes - no kc checking needed within this subroutine
+!! NOTE: UMM is valid for all thrust regimes - do not need to check if k > kc and apply any high-thrust corrections
 subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H)
    implicit none
    real(R8Ki), intent(in) :: chi0                     !< Skew/yaw angle [rad] (effective yaw)
    real(R8Ki), intent(in) :: k                        !< Thrust parameter from BEM: k = sigma_p*Cn/(4*F*sin^2(phi))
    real(ReKi), intent(in) :: F                        !< Tip/hub loss factor
-   real(ReKi), intent(in) :: phi                      !< BEMT airfoil inflow angle (kept for interface compatibility)
-   real(R8Ki), intent(out):: axInd                    !< Axial induction factor (output)
-   real(R8Ki), intent(out):: H                        !< Tangential induction scaling (set to 1.0 for UMM)
+   real(ReKi), intent(in) :: phi                      !< BEMT airfoil inflow angle
+   real(R8Ki), intent(out):: axInd                    !< Axial induction factor
+   real(R8Ki), intent(out):: H                        !< scaling factor to gradually phase out tangential induction when axial induction is near 1.0
 
    ! Local variables for UMM iteration
-   real(R8Ki) :: state(6)                             !< State vector: (an, u4, v4, x0, dp, Ctprime)
+   real(R8Ki) :: state(6)                             !< x = (an, u4, v4, x0, dp, Ctprime)
    real(R8Ki) :: residuals(6)                         !< Residual vector
    real(R8Ki) :: max_resid                            !< Maximum absolute residual
    integer(IntKi) :: iter                             !< Iteration counter
@@ -1072,7 +1072,7 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H)
    logical :: FileExists
    character(256) :: LogFileName
 
-   ! Handle special case: zero or near-zero thrust
+   ! Handle CT=0 scenario and avoid numerical instability
    if (abs(k) < 1.0e-10_R8Ki) then
       axInd = 0.0_R8Ki
       H = 1.0_R8Ki
@@ -1087,7 +1087,8 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H)
 
    !---------------------------------------------------------------------------
    ! Fixed-point iteration loop
-   ! Reference: Python ThrustBasedUnified uses max 10000 iterations, tol=1e-5, relax=0.4
+   ! Hardcoded iteration settings from https://github.com/Howland-Lab/Unified-Momentum-Model/blob/main/UnifiedMomentumModel/Momentum.py: 
+   ! max 10000 iterations, tol=1e-5, relax=0.4
    !---------------------------------------------------------------------------
    converged = .false.
    do iter = 1, UMM_MAX_ITER
@@ -1103,9 +1104,9 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H)
       endif
 
       ! Update state with relaxation
-      state = state + UMM_RELAXATION * residuals
+      state = state + (1.0_R8Ki - UMM_RELAXATION) * residuals
 
-      ! Apply bounds to prevent divergence
+      ! Apply loose bounds to prevent divergence
       state(1) = max(-0.5_R8Ki, min(state(1), 1.5_R8Ki))    ! an: bounded
       state(2) = max(-2.0_R8Ki, min(state(2), 2.0_R8Ki))    ! u4: bounded
       state(3) = max(-2.0_R8Ki, min(state(3), 2.0_R8Ki))    ! v4: bounded
@@ -1119,12 +1120,7 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H)
    ! Extract outputs
    !---------------------------------------------------------------------------
    axInd = state(1)  ! Axial induction (an)
-   H = 1.0_R8Ki      ! UMM does not modify tangential induction scaling
-
-   ! Apply sign of k to handle negative thrust cases
-   if (k < 0.0_R8Ki) then
-      axInd = -abs(axInd)
-   endif
+   H = 1.0_R8Ki      ! UMM does not modify tangential induction (leave as is)
 
    !---------------------------------------------------------------------------
    ! Debug logging for non-convergence (optional)

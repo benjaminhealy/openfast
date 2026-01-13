@@ -1,14 +1,14 @@
 !**********************************************************************************************************************************
 ! UMM_FixedPointIteration Module
-! Part of the Unified Momentum Model (UMM) implementation for OpenFAST
+! Unified Momentum Model (UMM) Module for OpenFAST Implementation
 !
 ! This module contains:
 !   - UMM iteration parameters (BETA, V4_CORR, MAX_ITER, TOLERANCE, RELAXATION)
 !   - computeUMMResiduals6: Compute the 6 UMM residual equations
-!   - getUMMInitialGuess: Get initial guess for UMM iteration
+!   - getUMMInitialGuess: Get initial guess for UMM iteration (using LimitedHeck from https://github.com/Howland-Lab/Unified-Momentum-Model/blob/main/UnifiedMomentumModel/Momentum.py)
 !
-! Reference: Liew et al. 2024 - https://www.nature.com/articles/s41467-024-50756-5
-! Python source: UnifiedMomentumModel/Momentum.py (ThrustBasedUnified class)
+! Reference Paper: Liew et al. 2024 - https://www.nature.com/articles/s41467-024-50756-5
+! Code Source (Python): https://github.com/Howland-Lab/Unified-Momentum-Model/blob/main/UnifiedMomentumModel/Momentum.py
 !
 !**********************************************************************************************************************************
 module UMM_FixedPointIteration
@@ -28,17 +28,16 @@ module UMM_FixedPointIteration
    real(R8Ki),     public, parameter :: UMM_TOLERANCE = 1.0e-5_R8Ki  ! Convergence tolerance on residuals
    real(R8Ki),     public, parameter :: UMM_RELAXATION = 0.4_R8Ki    ! Relaxation factor (ThrustBasedUnified: [0.4, 0.6])
 
-   ! NOTE: OpenFAST has existing parameters that could be reused in future:
+   ! NOTE: OpenFAST has existing parameters that could be reused, but the appropriate tol and max_iter may vary:
    !   p%aTol             - tolerance for induction solve (typically 5e-5 to 5e-10)
    !   p%maxIndIterations - maximum iterations (from input file)
-   ! These could replace hardcoded values if configurability is desired.
+   ! Hardcoding UMM iteration settings for now (TODO)
 
    !-------------------------------------------------------------------------------------------------
    ! UMM Physical Constants
-   ! From Python, line 214
    !-------------------------------------------------------------------------------------------------
    real(R8Ki),     public, parameter :: UMM_BETA = 0.1403_R8Ki       ! Wake expansion parameter (empirical)
-   real(R8Ki),     public, parameter :: UMM_V4_CORR = 1.0_R8Ki       ! Lateral velocity correction (Lu 2023 suggests 1.5)
+   real(R8Ki),     public, parameter :: UMM_V4_CORR = 1.0_R8Ki       ! Lateral velocity correction
 
    !-------------------------------------------------------------------------------------------------
    ! Public interface
@@ -48,105 +47,118 @@ module UMM_FixedPointIteration
 
 contains
 
-   !> Compute the 6 UMM residual equations for ThrustBasedUnified model
-   !! State vector x = (an, u4, v4, x0, dp, Ctprime)
-   !! Reference: UnifiedMomentumModel/Momentum.py, ThrustBasedUnified class
+   !> Compute the 6 UMM residual equations (ThrustBasedUnified model)
+   !! x = (an, u4, v4, x0, dp, Ctprime)
    !!
    !! The 6 equations are:
-   !!   Eq 1: Rotor-normal induction (Eq. 7 in Liew 2024)
-   !!   Eq 2: Streamwise outlet velocity (Eq. 8 in Liew 2024)
-   !!   Eq 3: Lateral outlet velocity (Eq. 9 in Liew 2024)
-   !!   Eq 4: Near-wake length (Eq. 10 in Liew 2024)
-   !!   Eq 5: Outlet pressure drop (Eq. 11 in Liew 2024)
-   !!   Eq 6: CT-Ctprime relationship (bridges BEM k to UMM Ctprime)
+   !!   Eq 1: Rotor-normal induction (Eq. 1 in Liew et al 2024)
+   !!   Eq 2: Streamwise outlet velocity (Eq. 2 in Liew et al 2024)
+   !!   Eq 3: Lateral outlet velocity (Eq. 3 in Liew 2et al 024)
+   !!   Eq 4: Near-wake length (Eq. 4 in Liew et al 2024)
+   !!   Eq 5: Outlet pressure drop (Eq. 5 in Liew et al 2024)
+   !!   Eq 6: CT-Ctprime relationship that bridges BEM k to UMM Ctprime (Eq. 6 in Liew et al 2024, modified)
    !!
-   !! @param x State vector: (an, u4, v4, x0, dp, Ctprime)
-   !! @param k Thrust parameter from BEM
+   !! @param x = (an, u4, v4, x0, dp, Ctprime)
+   !! @param k Thrust parameter from BEM solution passed by OpenFAST (Aerodyn/BEMTUncoupled.f90)
    !! @param F Tip/hub loss factor
    !! @param eff_yaw Effective yaw angle [rad]
    !! @param residuals Output residuals
    subroutine computeUMMResiduals6(x, k, F, eff_yaw, residuals)
       implicit none
-      real(R8Ki), intent(in)  :: x(6)         !< State vector: (an, u4, v4, x0, dp, Ctprime)
+      real(R8Ki), intent(in)  :: x(6)         !< x = (an, u4, v4, x0, dp, Ctprime)
       real(R8Ki), intent(in)  :: k            !< Thrust parameter from BEM
       real(ReKi), intent(in)  :: F            !< Tip/hub loss factor
       real(R8Ki), intent(in)  :: eff_yaw      !< Effective yaw angle [rad]
       real(R8Ki), intent(out) :: residuals(6) !< Output residuals
 
-      ! Local variables - state extraction
+      ! Local variables (x) to solve via fixed point iteration
       real(R8Ki) :: an, u4, v4, x0_val, dp, Ctprime
-      ! Intermediate calculations
+      ! Intermediate calculations for system of equations (Liew et al 2024 Eq. 1 - 6)
       real(R8Ki) :: cos_eff_yaw, cos_eff_yaw2, sin_eff_yaw
       real(R8Ki) :: CT, dp_half, p_g, p_linear
       real(R8Ki) :: term1, term2_sqrt_arg, sqrt_arg1
       real(R8Ki) :: an_new, u4_new, v4_new, x0_new, dp_new, Ctprime_new
 
-      ! Extract state variables
+      ! Extract state variables (x)
       an      = x(1)
-      u4      = x(2)
-      v4      = x(3)
+      u4      = x(2)    ! non-dimensionalized as fraction of u_inf
+      v4      = x(3)    ! non-dimensionalized as fraction of u_inf
       x0_val  = x(4)
       dp      = x(5)
       Ctprime = x(6)
 
-      ! Precompute trigonometric terms
+      ! Precompute trigonometric terms w.r.t. skewed inflow
       cos_eff_yaw  = cos(eff_yaw)
       cos_eff_yaw2 = cos_eff_yaw**2
       sin_eff_yaw  = sin(eff_yaw)
 
-      ! Guard against cos(yaw) = 0 (perpendicular flow)
+      ! Avoid cos2(yaw) = 0 to prevent numerical instability in Eq. 1
       if (cos_eff_yaw2 < 1.0e-10_R8Ki) then
          cos_eff_yaw2 = 1.0e-10_R8Ki
       endif
 
-      ! Special case: zero thrust (avoid division by zero)
+      ! Handle CT=0 scenario and avoid numerical instability in Eq. 1
       if (abs(Ctprime) < 1.0e-10_R8Ki) then
-         residuals(1) = -an
-         residuals(2) = 1.0_R8Ki - u4
-         residuals(3) = -v4
-         residuals(4) = 100.0_R8Ki - x0_val
-         residuals(5) = -dp
-         residuals(6) = -Ctprime
+         residuals(1) = -an                  ! an = an - an = 0
+         residuals(2) = 1.0_R8Ki - u4        ! u4 = u4 + (1 - u4) = 1
+         residuals(3) = -v4                  ! v4 = v4 - v4 = 0
+         residuals(4) = 100.0_R8Ki - x0_val  ! x0_val = x0_val + (100 - x0_val) = 100
+         residuals(5) = -dp                  ! dp = dp - dp = 0
+         residuals(6) = -Ctprime             ! Ctprime = Ctprime - Ctprime = 0
          return
       endif
 
       ! Compute CT from k and current an (bridges BEM to UMM)
-      ! CT = 4*F*k*(1-an)^2 (global thrust coefficient)
+      ! CT = 4*F*k*(1-an)^2 
       CT = 4.0_R8Ki * real(F, R8Ki) * k * (1.0_R8Ki - an)**2
 
       ! Get nonlinear pressure correction from table
+      ! dp = CT/2 = Δp / (ρ * u∞²) derived from AD theory:
+      !
+      ! CT = |F_t| / (0.5 * ρ * u∞² * A)
+      ! F_t = dp * A
+      !
       dp_half = CT / 2.0_R8Ki
+
+      ! Call bilinear interpoltation of pre-cached nonlinear pressure table at dp and x0 indices
       p_g = interpolatePressureTable(dp_half, max(x0_val, 0.01_R8Ki))
 
       !------------------------------------------------------------------------
-      ! Equation 1: Rotor-normal induction (Eq. 7 in Liew 2024)
+      ! Equation 1: Rotor-normal induction (Eq. 1 in Liew et al 2024)
       ! an = 1 - sqrt(-dp/(0.5*Ctprime*cos^2(yaw)) + (1-u4^2-v4^2)/(Ctprime*cos^2(yaw)))
+      !
+      ! NOTE: velocities are non-dimensionalized by normalizing by u_inf 
+      ! (u_inf is non-dimensionalized to 1 via normalization and therefore vanishes from several terms in the equations below)
+      !
+      ! NOTE: density is already encoded in the denominator of dp = Δp / (ρ * u∞²)
       !------------------------------------------------------------------------
       sqrt_arg1 = -dp / (0.5_R8Ki * Ctprime * cos_eff_yaw2) + &
                   (1.0_R8Ki - u4**2 - v4**2) / (Ctprime * cos_eff_yaw2)
+      
       if (sqrt_arg1 >= 0.0_R8Ki) then
          an_new = 1.0_R8Ki - sqrt(sqrt_arg1)
       else
-         an_new = an  ! Keep current value if sqrt argument is negative
+         an_new = an  ! Error handling: keep current value if sqrt argument is negative
       endif
       residuals(1) = an_new - an
 
       !------------------------------------------------------------------------
-      ! Equation 2: Streamwise outlet velocity (Eq. 8 in Liew 2024)
+      ! Equation 2: Streamwise outlet velocity (Eq. 2 in Liew et al 2024)
       ! u4 = -0.25*Ctprime*(1-an)*cos^2(yaw) + 0.5 + 0.5*sqrt((0.5*Ctprime*(1-an)*cos^2(yaw)-1)^2 - 4*dp)
       !------------------------------------------------------------------------
       term1 = -0.25_R8Ki * Ctprime * (1.0_R8Ki - an) * cos_eff_yaw2
       term2_sqrt_arg = (0.5_R8Ki * Ctprime * (1.0_R8Ki - an) * cos_eff_yaw2 - 1.0_R8Ki)**2 - &
-                       4.0_R8Ki * dp
+                       (4.0_R8Ki * dp)
+      
       if (term2_sqrt_arg >= 0.0_R8Ki) then
          u4_new = term1 + 0.5_R8Ki + 0.5_R8Ki * sqrt(term2_sqrt_arg)
       else
-         u4_new = u4  ! Keep current value if sqrt argument is negative
+         u4_new = u4  ! Error handling: keep current value if sqrt argument is negative
       endif
       residuals(2) = u4_new - u4
 
       !------------------------------------------------------------------------
-      ! Equation 3: Lateral outlet velocity (Eq. 9 in Liew 2024)
+      ! Equation 3: Lateral outlet velocity (Eq. 3 in Liew et al 2024)
       ! v4 = -v4_corr * 0.25 * Ctprime * (1-an)^2 * sin(yaw) * cos^2(yaw)
       !------------------------------------------------------------------------
       v4_new = -UMM_V4_CORR * 0.25_R8Ki * Ctprime * (1.0_R8Ki - an)**2 * &
@@ -154,21 +166,26 @@ contains
       residuals(3) = v4_new - v4
 
       !------------------------------------------------------------------------
-      ! Equation 4: Near-wake length (Eq. 10 in Liew 2024)
+      ! Equation 4: Near-wake length (Eq. 4 in Liew et al 2024)
       ! x0 = cos(yaw)/(2*beta) * (1+u4)/|1-u4| * sqrt((1-an)*cos(yaw)/(1+u4))
+      !
+      ! NOTE: x0_val is non-dimensionalized by D, thus D is not included in Eq. 4 and 5
       !------------------------------------------------------------------------
       if (abs(1.0_R8Ki - u4) > 1.0e-10_R8Ki .and. (1.0_R8Ki + u4) > 1.0e-10_R8Ki .and. &
-          (1.0_R8Ki - an) * cos_eff_yaw / (1.0_R8Ki + u4) >= 0.0_R8Ki) then
-         x0_new = cos_eff_yaw / (2.0_R8Ki * UMM_BETA) * &
-                  (1.0_R8Ki + u4) / abs(1.0_R8Ki - u4) * &
+         (1.0_R8Ki - an) * cos_eff_yaw / (1.0_R8Ki + u4) >= 0.0_R8Ki) then
+         
+         x0_new = cos_eff_yaw / &
+                  (2.0_R8Ki * UMM_BETA) * &
+                  (1.0_R8Ki + u4) / &
+                  abs(1.0_R8Ki - u4) * &
                   sqrt((1.0_R8Ki - an) * cos_eff_yaw / (1.0_R8Ki + u4))
       else
-         x0_new = x0_val  ! Keep current value if division or sqrt would fail
+         x0_new = x0_val  ! Error handling: keep current value if division or sqrt would fail
       endif
       residuals(4) = x0_new - x0_val
 
       !------------------------------------------------------------------------
-      ! Equation 5: Outlet pressure drop (Eq. 11 in Liew 2024)
+      ! Equation 5: Outlet pressure drop (Eq. 5 in Liew et al 2024)
       ! dp = p_linear + p_g
       ! where p_linear = -(1/(2*pi)) * Ctprime * (1-an)^2 * cos^2(yaw) * atan(1/(2*x0))
       !------------------------------------------------------------------------
@@ -178,7 +195,7 @@ contains
       residuals(5) = dp_new - dp
 
       !------------------------------------------------------------------------
-      ! Equation 6: CT-Ctprime relationship (bridges BEM k to UMM Ctprime)
+      ! Equation 6: CT-Ctprime relationship that bridges BEM k to UMM Ctprime (Eq. 6 in Liew et al 2024, modified)
       ! Ctprime = CT / ((1-an)^2 * cos^2(yaw))
       ! where CT = 4*F*k*(1-an)^2
       ! This simplifies to: Ctprime = 4*F*k / cos^2(yaw)
@@ -186,14 +203,14 @@ contains
       if (abs(1.0_R8Ki - an) > 1.0e-10_R8Ki) then
          Ctprime_new = CT / ((1.0_R8Ki - an)**2 * cos_eff_yaw2)
       else
-         Ctprime_new = Ctprime  ! Keep current value to avoid division by zero
+         Ctprime_new = Ctprime  ! Error handling: keep current value to avoid division by zero
       endif
       residuals(6) = Ctprime_new - Ctprime
 
    end subroutine computeUMMResiduals6
 
    !> Get initial guess for UMM iteration using ThrustBasedUnified approach
-   !! Reference: UnifiedMomentumModel/Momentum.py, ThrustBasedUnified.initial_guess (lines 365-373)
+   !! Reference: https://github.com/Howland-Lab/Unified-Momentum-Model/blob/main/UnifiedMomentumModel/Momentum.py, ThrustBasedUnified.initial_guess
    !!
    !! @param k Thrust parameter from BEM
    !! @param F Tip/hub loss factor
@@ -211,33 +228,39 @@ contains
 
       cos_eff_yaw2 = cos(eff_yaw)**2
 
-      ! Guard against cos(yaw) = 0
+      ! Avoid cos2(yaw) = 0 to prevent numerical instability in Eq. 1
       if (cos_eff_yaw2 < 1.0e-10_R8Ki) then
          cos_eff_yaw2 = 1.0e-10_R8Ki
       endif
 
-      ! Initial CT estimate assuming an ≈ 1/3 (typical induction)
-      ! CT = 4*F*k*(1-an)^2 ≈ 4*F*k*(2/3)^2 = 4*F*k*(4/9) ≈ 1.78*F*k
-      CT_init = 4.0_R8Ki * real(F, R8Ki) * k * (1.0_R8Ki - 1.0_R8Ki/3.0_R8Ki)**2
+      ! Initial CT estimate assuming an ≈ 1/3
+      ! CT = 4*F*k*(1-an)^2 ≈ 4*F*k*(2/3)^2 = 4*F*k*(4/9) from OpenFAST BEM solution
+      !
+      ! Handle CT=0 and CT < 0 scenario and avoid numerical instability and enforce turbine behavior
+      if (abs(k) < 1.0e-10_R8Ki) then
+         CT_init = 0
+      else
+         CT_init = 4.0_R8Ki * real(F, R8Ki) * k * (1.0_R8Ki - 1.0_R8Ki/3.0_R8Ki)**2
+      endif
 
-      ! ThrustBasedUnified initial guess (from Python lines 365-373)
-      an_init = 0.5_R8Ki * CT_init                ! Half of thrust coefficient
+      ! ThrustBasedUnified initial guess
+      an_init = 0.5_R8Ki * CT_init                     ! Half of thrust coefficient
       an_init = max(0.0_R8Ki, min(an_init, 0.9_R8Ki))  ! Bound to reasonable range
 
-      ! Initial Ctprime estimate
+      ! Initial Ctprime estimate from Eq. 6
       if (abs(1.0_R8Ki - an_init) > 1.0e-10_R8Ki .and. cos_eff_yaw2 > 1.0e-10_R8Ki) then
          Ctprime_init = CT_init / ((1.0_R8Ki - an_init)**2 * cos_eff_yaw2)
       else
          Ctprime_init = sign(1.0_R8Ki, CT_init)  ! Just the sign if division would fail
       endif
 
-      ! State vector: (an, u4, v4, x0, dp, Ctprime)
-      x0_state(1) = an_init                      ! Axial induction
-      x0_state(2) = 1.0_R8Ki - CT_init           ! Streamwise outlet velocity
-      x0_state(3) = 0.0_R8Ki                     ! Lateral outlet velocity (zero initially)
-      x0_state(4) = 100.0_R8Ki                   ! Near-wake length (large initial value)
-      x0_state(5) = 0.0_R8Ki                     ! Pressure drop (zero initially)
-      x0_state(6) = Ctprime_init                 ! Initial Ctprime estimate
+      ! x = (an, u4, v4, x0, dp, Ctprime)
+      x0_state(1) = an_init                  ! Axial induction
+      x0_state(2) = 1.0_R8Ki - CT_init       ! Streamwise outlet velocity
+      x0_state(3) = 0.0_R8Ki                 ! Lateral outlet velocity (zero initially)
+      x0_state(4) = 100.0_R8Ki               ! Near-wake length (large initial value)
+      x0_state(5) = 0.0_R8Ki                 ! Pressure drop (zero initially)
+      x0_state(6) = Ctprime_init             ! Initial Ctprime estimate
 
    end subroutine getUMMInitialGuess
 
