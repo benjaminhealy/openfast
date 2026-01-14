@@ -109,8 +109,11 @@ contains
       endif
 
       ! Compute CT from k and current an (bridges BEM to UMM)
-      ! CT = 4*F*k*(1-an)^2 
+      ! CT = 4*F*k*(1-an)^2
       CT = 4.0_R8Ki * real(F, R8Ki) * k * (1.0_R8Ki - an)**2
+
+      ! Clamp CT to physically reasonable bounds to prevent divergence with extreme k
+      CT = max(-4.0_R8Ki, min(CT, 10.0_R8Ki))
 
       ! Get nonlinear pressure correction from table
       ! dp = CT/2 = Δp / (ρ * u∞²) derived from AD theory:
@@ -242,6 +245,10 @@ contains
       else
          CT_init = 4.0_R8Ki * real(F, R8Ki) * k * (1.0_R8Ki - 1.0_R8Ki/3.0_R8Ki)**2
       endif
+
+      ! Clamp CT_init to physically reasonable bounds
+      ! CT typically ranges 0-2 for normal operation, allowing wider range for edge cases
+      CT_init = max(-4.0_R8Ki, min(CT_init, 10.0_R8Ki))
 
       ! ThrustBasedUnified initial guess
       an_init = 0.5_R8Ki * CT_init                     ! Half of thrust coefficient

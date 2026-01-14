@@ -1112,7 +1112,7 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H)
       state(3) = max(-2.0_R8Ki, min(state(3), 2.0_R8Ki))    ! v4: bounded
       state(4) = max(0.01_R8Ki, min(state(4), 1000.0_R8Ki)) ! x0: positive, bounded
       state(5) = max(-2.0_R8Ki, min(state(5), 0.5_R8Ki))    ! dp: bounded
-      state(6) = max(-10.0_R8Ki, min(state(6), 100.0_R8Ki)) ! Ctprime: bounded
+      state(6) = max(-10.0_R8Ki, min(state(6), 20.0_R8Ki))  ! Ctprime: bounded (tighter upper bound)
 
    end do
 
