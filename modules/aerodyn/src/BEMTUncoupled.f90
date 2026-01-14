@@ -1079,6 +1079,15 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H)
       return
    endif
 
+   ! Handle extreme k values where UMM fixed-point iteration cannot converge
+   ! When phi ~= 0, k = sigma*Cn/(4*F*sin²(phi)) approaches infinity resulting in numerical instability and a diverging solution
+   ! Use 1D momentum theory: a = k/(k+1) which naturally bounds to [-1, 1]
+   if (abs(k) > 100.0_R8Ki) then
+      axInd = k / (k + 1.0_R8Ki)
+      H = 1.0_R8Ki
+      return
+   endif
+
    !---------------------------------------------------------------------------
    ! Initialize state vector using ThrustBasedUnified approach
    ! State = (an, u4, v4, x0, dp, Ctprime)
@@ -1107,7 +1116,7 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H)
       state = state + (1.0_R8Ki - UMM_RELAXATION) * residuals
 
       ! Apply loose bounds to prevent divergence
-      state(1) = max(-0.5_R8Ki, min(state(1), 1.5_R8Ki))    ! an: bounded
+      state(1) = max(-1.5_R8Ki, min(state(1), 1.5_R8Ki))    ! an: symmetric bounds for edge cases
       state(2) = max(-2.0_R8Ki, min(state(2), 2.0_R8Ki))    ! u4: bounded
       state(3) = max(-2.0_R8Ki, min(state(3), 2.0_R8Ki))    ! v4: bounded
       state(4) = max(0.01_R8Ki, min(state(4), 1000.0_R8Ki)) ! x0: positive, bounded

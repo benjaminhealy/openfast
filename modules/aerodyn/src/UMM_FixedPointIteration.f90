@@ -250,8 +250,9 @@ contains
       ! CT typically ranges 0-2 for normal operation, allowing wider range for edge cases
       CT_init = max(-4.0_R8Ki, min(CT_init, 10.0_R8Ki))
 
-      ! ThrustBasedUnified initial guess
-      an_init = 0.5_R8Ki * CT_init                     ! Half of thrust coefficient
+      ! Initial guess for axial induction from 1D momentum theory: a = k/(k+1)
+      ! Numerically stable formulation bounded between [-1,1], even for large k-values passed from BEMT
+      an_init = k / (k + 1.0_R8Ki)
       an_init = max(0.0_R8Ki, min(an_init, 0.9_R8Ki))  ! Bound to reasonable range
 
       ! Initial Ctprime estimate from Eq. 6
