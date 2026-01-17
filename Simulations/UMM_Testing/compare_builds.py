@@ -41,7 +41,7 @@ WIND_SPEEDS = [4, 6, 8, 10, 12, 14, 16, 18]  # m/s
 # Paths
 WORK_DIR = '/Users/benhealy/OpenFAST/Simulations/UMM_Testing/'
 FST_FILE = '5MW_Land_BD_DLL_WTurb_Skewed_Loads.fst'
-OUTPUT_BASE = os.path.join(WORK_DIR, 'UMM_Testing')
+OUTPUT_BASE = os.path.join(WORK_DIR, 'UMM_Testing/comp_results/')
 
 INPUT_FILES = {
     'elastodyn': os.path.join(WORK_DIR, 'NRELOffshrBsline5MW_Onshore_ElastoDyn.dat'),

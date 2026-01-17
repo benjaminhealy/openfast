@@ -41,6 +41,15 @@ module BEMTUnCoupled
    
    real(R8Ki),             parameter  :: MaxTanChi0   = 100.0_R8Ki         ! maximum absolute value allowed for tan(chi0), an arbitary large number
 
+   ! UMM 1D momentum fallback counters - tracks when simplified a=k/(k+1) formula is used
+   integer(IntKi), save :: UMM_1DMomentumFallbackCount = 0       ! Total fallbacks across simulation
+   logical,        save :: UMM_1DMomentumFallbackWarned = .false.
+
+   ! Per-Brent-solve tracking (reset at start of each Brent solve)
+   integer(IntKi), save :: UMM_BrentSolveFallbackCount = 0       ! Fallbacks in current Brent solve
+   integer(IntKi), save :: UMM_BrentSolveEvalCount = 0           ! Total evaluations in current Brent solve
+   integer(IntKi), save :: UMM_LastFallbackEvalNum = 0           ! Evaluation number of last fallback
+
    !1e-6 works for double precision, but not single precision
    real(ReKi),     public, parameter  :: BEMT_epsilon2 = 10.0_ReKi*sqrt(epsilon(1.0_ReKi)) !this is the tolerance in radians for values around singularities in phi (i.e., phi=0 and phi=pi/2); must be large enough so that EqualRealNos(BEMT_epsilon2, 0.0_ReKi) is false
 
@@ -62,6 +71,11 @@ module BEMTUnCoupled
    public :: VelocityIsZero
 
    public :: BEMTU_Test_ACT_Relationship
+   public :: UMM_Get1DMomentumFallbackStats
+   public :: UMM_Reset1DMomentumFallbackStats
+   public :: UMM_ResetBrentSolveStats
+   public :: UMM_IncrementBrentEvalCount
+   public :: UMM_LogBrentConvergence
 contains
    
 !..................................................................................................................................   
@@ -72,8 +86,70 @@ contains
       VelocityIsZero = abs(v) < 0.001_ReKi ! tolerance in m/s for what we consider zero velocity for BEM computations
    
    end function VelocityIsZero
-!..................................................................................................................................   
-   
+!..................................................................................................................................
+!> Get statistics on how many times the 1D momentum fallback (a=k/(k+1)) was used instead of full UMM iteration
+!! This occurs when |k| > 100 due to extreme values from near-zero inflow angles
+subroutine UMM_Get1DMomentumFallbackStats(count)
+   integer(IntKi), intent(out) :: count   !< Number of times 1D momentum fallback was used
+   count = UMM_1DMomentumFallbackCount
+end subroutine UMM_Get1DMomentumFallbackStats
+!..................................................................................................................................
+!> Reset the 1D momentum fallback counter (call at start of simulation or when desired)
+subroutine UMM_Reset1DMomentumFallbackStats()
+   UMM_1DMomentumFallbackCount = 0
+   UMM_1DMomentumFallbackWarned = .false.
+end subroutine UMM_Reset1DMomentumFallbackStats
+!..................................................................................................................................
+!> Reset per-Brent-solve counters (call at start of each sub_brent call)
+subroutine UMM_ResetBrentSolveStats()
+   UMM_BrentSolveFallbackCount = 0
+   UMM_BrentSolveEvalCount = 0
+   UMM_LastFallbackEvalNum = 0
+end subroutine UMM_ResetBrentSolveStats
+!..................................................................................................................................
+!> Increment evaluation counter (call each time BEMTU_InductionWithResidual is evaluated in Brent)
+subroutine UMM_IncrementBrentEvalCount()
+   UMM_BrentSolveEvalCount = UMM_BrentSolveEvalCount + 1
+end subroutine UMM_IncrementBrentEvalCount
+!..................................................................................................................................
+!> Log Brent convergence stats if 1D fallback was used (call when Brent converges)
+subroutine UMM_LogBrentConvergence(iBladeNode, jBlade, phi, converged)
+   integer(IntKi), intent(in) :: iBladeNode, jBlade
+   real(ReKi),     intent(in) :: phi
+   logical,        intent(in) :: converged
+
+   integer(IntKi) :: itersSinceLastFallback
+   integer(IntKi) :: UnLog, ErrStat
+   logical :: FileExists
+   character(256) :: LogFileName
+
+   ! Only log if fallbacks occurred and solution converged
+   if (UMM_BrentSolveFallbackCount > 0 .and. converged) then
+      itersSinceLastFallback = UMM_BrentSolveEvalCount - UMM_LastFallbackEvalNum
+
+      LogFileName = 'UMM_1D_fallback_convergence.log'
+      inquire(file=trim(LogFileName), exist=FileExists)
+
+      UnLog = 99
+      if (FileExists) then
+         open(unit=UnLog, file=trim(LogFileName), status='old', position='append', iostat=ErrStat)
+      else
+         open(unit=UnLog, file=trim(LogFileName), status='new', iostat=ErrStat)
+         if (ErrStat == 0) then
+            write(UnLog, '(A)') 'iNode,jBlade,phi,fallbackCount,totalEvals,itersSinceLastFallback'
+         endif
+      endif
+
+      if (ErrStat == 0) then
+         write(UnLog, '(I4,A,I2,A,E12.5,A,I4,A,I4,A,I4)') &
+            iBladeNode, ',', jBlade, ',', phi, ',', &
+            UMM_BrentSolveFallbackCount, ',', UMM_BrentSolveEvalCount, ',', itersSinceLastFallback
+         close(UnLog)
+      endif
+   endif
+end subroutine UMM_LogBrentConvergence
+!..................................................................................................................................
+
    subroutine GetReynoldsNumber(BEM_Mod, axInduction, tanInduction, Vx, Vy, Vz, chord, nu, theta, phi, cantAngle, toeAngle , Re )
 
    
@@ -1085,6 +1161,16 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H)
    if (abs(k) > 100.0_R8Ki) then
       axInd = k / (k + 1.0_R8Ki)
       H = 1.0_R8Ki
+      ! Track usage of 1D momentum fallback for monitoring (global)
+      UMM_1DMomentumFallbackCount = UMM_1DMomentumFallbackCount + 1
+      ! Track per-Brent-solve stats
+      UMM_BrentSolveFallbackCount = UMM_BrentSolveFallbackCount + 1
+      UMM_LastFallbackEvalNum = UMM_BrentSolveEvalCount
+      if (.not. UMM_1DMomentumFallbackWarned) then
+         call WrScr('UMM: Using 1D momentum fallback (a=k/(k+1)) for extreme k='//trim(Num2LStr(k))// &
+                    '. This warning will not repeat. Use UMM_Get1DMomentumFallbackStats() to query total count.')
+         UMM_1DMomentumFallbackWarned = .true.
+      endif
       return
    endif
 
@@ -1117,7 +1203,7 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H)
 
       ! Apply loose bounds to prevent divergence
       state(1) = max(-1.5_R8Ki, min(state(1), 1.5_R8Ki))    ! an: symmetric bounds for edge cases
-      state(2) = max(-2.0_R8Ki, min(state(2), 2.0_R8Ki))    ! u4: bounded
+      state(2) = max(-3.0_R8Ki, min(state(2), 2.5_R8Ki))    ! u4: widened to match an bounds (u4 ≈ 2an - 1)
       state(3) = max(-2.0_R8Ki, min(state(3), 2.0_R8Ki))    ! v4: bounded
       state(4) = max(0.01_R8Ki, min(state(4), 1000.0_R8Ki)) ! x0: positive, bounded
       state(5) = max(-2.0_R8Ki, min(state(5), 0.5_R8Ki))    ! dp: bounded
