@@ -22,8 +22,8 @@ False                  CompAA      - Flag to compute AeroAcoustics calculation [
 2                      BEM_Mod     - BEM model {1=legacy NoSweepPitchTwist, 2=polar} (switch) [used for all Wake_Mod to determine output coordinate system]
 --- Skew correction
 1                      Skew_Mod    - Skew model {0=No skew model, -1=Remove non-normal component for linearization, 1=skew model active}
-2                      SkewMomCorr - Skew Momentum Correction {0=Axial Theory, 1 = Glauert Momentum Theory, 2 = Unified Momentum Model (Liew et al. 2024)}
-default                SkewRedistr_Mod - Type of skewed-wake correction model (switch) {0=no redistribution, 1=Glauert/Pitt/Peters, default=1} [used only when Skew_Mod=1]
+True                      SkewMomCorr - Skew Momentum Correction {0=Axial Theory, 1 = Glauert Momentum Theory, 2 = Unified Momentum Model (Liew et al. 2024)}
+1                SkewRedistr_Mod - Type of skewed-wake correction model (switch) {0=no redistribution, 1=Glauert/Pitt/Peters, default=1} [used only when Skew_Mod=1]
 "default"              SkewRedistrFactor - Constant used in Pitt/Peters skewed wake model {or "default" is 15/32*pi} (-) [used only when Skew_Mod=1 and SkewRedistr_Mod=1]
 --- BEM algorithm 
 True                   TipLoss     - Use the Prandtl tip-loss model? (flag) [unused when Wake_Mod=0 or 3]

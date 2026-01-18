@@ -67,5 +67,7 @@ openfast_io/openfast_io/_version.py
 
 # Simulations/Results
 Simulations/5MW_Land*
-Simulations/UMM_Testing/results/
+Simulations/UMM_Testing/results*
 Simulations/UMM_Testing/old/
+Simulations/UMM_Testing/
+

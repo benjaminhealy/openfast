@@ -31,17 +31,18 @@ BUILDS = {
 }
 
 # Test matrix
-YAW_ANGLES = [-30, -20, -15, -10, -5, 0, 5, 10, 15, 20, 30]  # degrees
-WIND_SPEEDS = [4, 6, 8, 10, 12, 14, 16, 18]  # m/s
+# YAW_ANGLES = [-30, -20, -15, -10, -5, 0, 5, 10, 15, 20, 30]  # degrees
+# WIND_SPEEDS = [4, 6, 8, 10, 12, 14, 16, 18]  # m/s
 
 # Quick test (uncomment to use smaller test matrix)
-# YAW_ANGLES = [0, 15, 30]
-# WIND_SPEEDS = [8, 12]
+YAW_ANGLES = [30]
+WIND_SPEEDS = [8]
 
 # Paths
-WORK_DIR = '/Users/benhealy/OpenFAST/Simulations/UMM_Testing/'
+WORK_DIR = '/Users/benhealy/OpenFAST/Simulations/UMM_Testing/results_comp_1x1_out_params_testing/'
 FST_FILE = '5MW_Land_BD_DLL_WTurb_Skewed_Loads.fst'
-OUTPUT_BASE = os.path.join(WORK_DIR, 'UMM_Testing/comp_results/')
+OUTPUT_BASE = os.path.join(WORK_DIR, '5MW_Land_BD_DLL_WTurb_Skewed_Loads')
+
 
 INPUT_FILES = {
     'elastodyn': os.path.join(WORK_DIR, 'NRELOffshrBsline5MW_Onshore_ElastoDyn.dat'),
@@ -52,8 +53,22 @@ INPUT_FILES = {
 }
 
 # Output columns to extract
+'''
 OUTPUT_COLS = ['GenPwr', 'RtAeroCp', 'RtAeroCt', 'RtAeroFxh', 'B1RootMyr',
-               'YawBrMzp', 'TwrBsMyt', 'RotSpeed', 'RtTSR']
+               'YawBrMzp', 'TwrBsMyt', 'RotSpeed', 'RtTSR', 'B1Pitch']
+'''
+
+'''
+OUTPUT_COLS = ['GenPwr', 'RtAeroCp', 'RtAeroCt', 'RtAeroFxh', 'B1RootMyr',
+               'YawBrMzp', 'TwrBsMyt', 'RotSpeed', 'RtTSR', 'B1N1AxInd',
+               'B1N2AxInd', 'B1N3AxInd', 'B1N4AxInd', 'B1N5AxInd', 'B1N6AxInd',
+               'B1N7AxInd', 'B1N8AxInd', 'B1N9AxInd', 'B1Pitch']
+'''
+OUTPUT_COLS = ['GenPwr', 'RtAeroCp', 'RtAeroCt', 'RtAeroFxh', 'B1RootMyr',
+               'YawBrMzp', 'TwrBsMyt', 'RotSpeed', 'RtTSR', 'B1N1AxInd',
+               'B1N2AxInd', 'B1N3AxInd', 'B1N4AxInd', 'B1N5AxInd', 'B1N6AxInd',
+               'B1N7AxInd', 'B1N8AxInd', 'B1N9AxInd', 'B1Pitch', 'B1Azimuth']
+
 
 # ============================================================================
 # UTILITY FUNCTIONS
@@ -83,14 +98,20 @@ def modify_parameter(filepath, param_name, new_value):
         f.writelines(lines)
 
 
-def setup_aerodyn(aerodyn_path, wind_speed):
+def setup_aerodyn(aerodyn_path, wind_speed, build_name):
     """Configure AeroDyn for yaw simulations"""
     modify_parameter(aerodyn_path, 'UA_Mod', '0')
     modify_parameter(aerodyn_path, 'AIDrag', 'True')
     modify_parameter(aerodyn_path, 'MaxIter', '300')
     modify_parameter(aerodyn_path, 'Skew_Mod', '1')
     modify_parameter(aerodyn_path, 'SkewRedistr_Mod', '1')
-    modify_parameter(aerodyn_path, 'SkewMomCorr', 'True')
+    
+    
+    if build_name == 'UMM':
+        modify_parameter(aerodyn_path, 'SkewMomCorr', '2')
+    else:
+        modify_parameter(aerodyn_path, 'SkewMomCorr', 'True')
+
 
 
 def setup_elastodyn(elastodyn_path, wind_speed):
@@ -191,7 +212,7 @@ def main():
 
             # Configure input files for this wind speed
             modify_parameter(INPUT_FILES['inflow'], 'HWindSpeed', f"{ws:.2f}")
-            setup_aerodyn(INPUT_FILES['aerodyn'], ws)
+            setup_aerodyn(INPUT_FILES['aerodyn'], ws, build_name)
             setup_elastodyn(INPUT_FILES['elastodyn'], ws)
             setup_elastodyn(INPUT_FILES['elastodyn_bd'], ws)
 
