@@ -44,7 +44,7 @@ SKEW_MOM_CORR = {
 # WIND_SPEEDS = [4, 6, 8, 10, 12, 14, 16, 18]  # m/s
 
 # Quick test (uncomment to use smaller test matrix)
-YAW_ANGLES = [0, 30]
+YAW_ANGLES = [0, 15, 30]
 WIND_SPEEDS = [8, 12]
 
 # Paths
