@@ -218,8 +218,9 @@ def run_simulation_job(job_config):
     fst_file = job_config['fst_file']
     job_id = job_config['job_id']
 
-    # Create isolated temp directory
-    temp_dir = tempfile.mkdtemp(prefix=f'openfast_job_{job_id}_')
+    # Create isolated temp directory inside work directory (preserves relative path structure)
+    temp_dir = os.path.join(base_work_dir, f'job_{job_id}')
+    os.makedirs(temp_dir, exist_ok=True)
 
     try:
         # Copy all input files to temp directory
@@ -230,6 +231,7 @@ def run_simulation_job(job_config):
                 shutil.copy2(src, dst)
 
         # Define paths in temp directory
+        temp_fst = os.path.join(temp_dir, fst_file)
         temp_input_files = {
             'elastodyn': os.path.join(temp_dir, 'NRELOffshrBsline5MW_Onshore_ElastoDyn.dat'),
             'elastodyn_bd': os.path.join(temp_dir, 'NRELOffshrBsline5MW_Onshore_ElastoDyn_BDoutputs.dat'),
@@ -237,7 +239,17 @@ def run_simulation_job(job_config):
             'aerodyn': os.path.join(temp_dir, 'NRELOffshrBsline5MW_Onshore_AeroDyn.dat'),
             'inflow': os.path.join(temp_dir, 'NRELOffshrBsline5MW_InflowWind.dat')
         }
-        temp_fst = os.path.join(temp_dir, fst_file)
+
+        # Adjust relative paths in all copied files (add ../ since we're one level deeper)
+        for filepath in [temp_fst] + list(temp_input_files.values()):
+            if os.path.exists(filepath):
+                with open(filepath, 'r') as f:
+                    content = f.read()
+                # Adjust paths like "../../" and "./../../" to "../../../" and "./../../../"
+                content = content.replace('"../../', '"../../../')
+                content = content.replace('"./../', '"../../')  # ./.. -> ../..
+                with open(filepath, 'w') as f:
+                    f.write(content)
 
         # Configure parameters for this job
         modify_parameter(temp_input_files['inflow'], 'HWindSpeed', f"{ws:.2f}")
@@ -253,13 +265,16 @@ def run_simulation_job(job_config):
         result = run_openfast(fst_file, temp_dir, exe_path)
 
         if result.returncode != 0:
+            # Get last 20 lines of stderr/stdout for error context
+            error_output = (result.stderr or result.stdout or "No output")[-2000:]
             return {
                 'success': False,
                 'job_id': job_id,
                 'skew_corr': skew_name,
                 'yaw': yaw,
                 'ws': ws,
-                'error': f"Exit code {result.returncode}"
+                'error': f"Exit code {result.returncode}",
+                'error_detail': error_output
             }
 
         # Extract results
@@ -368,6 +383,11 @@ def main():
         print(f"Failed: {len(failed_jobs)} simulations")
         for job in failed_jobs:
             print(f"  - ws={job['ws']}, yaw={job['yaw']}, skew={job['skew_corr']}: {job.get('error', 'Unknown')}")
+            if 'error_detail' in job:
+                # Print last few lines of error detail
+                detail_lines = job['error_detail'].strip().split('\n')[-10:]
+                for line in detail_lines:
+                    print(f"      {line}")
 
     if not all_results:
         print("\nNo successful simulations. Exiting.")

@@ -18,6 +18,14 @@
 ! limitations under the License.
 !
 !**********************************************************************************************************************************
+
+! Preprocessor fallback for UMM pressure table default path
+! This should be defined by CMake at compile time via target_compile_definitions
+! If not defined (e.g., IDE builds without CMake), provide empty string - user must specify in input file
+#ifndef UMM_DEFAULT_PRESSURE_FILE
+#define UMM_DEFAULT_PRESSURE_FILE ""
+#endif
+
 MODULE AeroDyn_IO
  
    use NWTC_Library
@@ -874,6 +882,21 @@ SUBROUTINE ParsePrimaryFileInfo( PriPath, InitInp, InputFile, RootName, NumBlade
    if (newInputMissing('SkewMomCorr', CurLine, errStat2, errMsg2)) then
       call WrScr('         Setting SkewMomCorr to 0 (None) as the input is Missing (legacy behavior).')
       InputFileData%SkewMomCorr = 0
+   endif
+
+   ! UMM_PressureFile - Path to UMM pressure table file [used when SkewMomCorr=2]
+   ! If not specified, uses default path set at compile time
+   if (InputFileData%SkewMomCorr == 2) then
+      call ParseVar( FileInfo_In, CurLine, "UMM_PressureFile", InputFileData%UMM_PressureFile, ErrStat2, ErrMsg2, UnEc )
+      if (newInputMissing('UMM_PressureFile', CurLine, errStat2, errMsg2)) then
+         ! Use compile-time default path
+         InputFileData%UMM_PressureFile = UMM_DEFAULT_PRESSURE_FILE
+      else
+         ! User specified a path - handle relative paths
+         if ( PathIsRelative( InputFileData%UMM_PressureFile ) ) InputFileData%UMM_PressureFile = TRIM(PriPath)//TRIM(InputFileData%UMM_PressureFile)
+      endif
+   else
+      InputFileData%UMM_PressureFile = ''
    endif
 
    ! SkewRedistr_Mod - Type of skewed-wake correction model (switch) {0: no redistribution, 1=Glauert/Pitt/Peters, 2=Vortex Cylinder} [unsed only when SkewMod=1]

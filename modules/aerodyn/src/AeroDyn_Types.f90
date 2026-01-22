@@ -226,6 +226,7 @@ IMPLICIT NONE
     REAL(ReKi)  :: SpdSound = 0.0_ReKi      !< Speed of sound [m/s]
     INTEGER(IntKi)  :: Skew_Mod = 0_IntKi      !< Select skew model {0=No skew model at all, -1=Throw away non-normal component for linearization, 1=Glauert skew model} [-]
     INTEGER(IntKi)  :: SkewMomCorr = 0_IntKi      !< Momentum correction method: 0=None, 1=Glauert, 2=Unified Momentum Model (Liew et al. 2024) [-]
+    CHARACTER(1024)  :: UMM_PressureFile      !< Path to UMM pressure table file [required when SkewMomCorr=2] [quoted strings]
     INTEGER(IntKi)  :: SkewRedistr_Mod = 0_IntKi      !< Type of skewed-wake redistribution model (switch) {0=no redistribution, 1=Glauert/Pitt/Peters, 2=Vortex Cylinder} [unsed only when SkewMod=1] [-]
     REAL(ReKi)  :: SkewModFactor = 0.0_ReKi      !< Constant used in Pitt/Peters skewed wake model (default is 15*pi/32) [-]
     LOGICAL  :: TipLoss = .false.      !< Use the Prandtl tip-loss model? [unused when Wake_Mod=0] [flag]
@@ -2137,6 +2138,7 @@ subroutine AD_CopyInputFile(SrcInputFileData, DstInputFileData, CtrlCode, ErrSta
    DstInputFileData%SpdSound = SrcInputFileData%SpdSound
    DstInputFileData%Skew_Mod = SrcInputFileData%Skew_Mod
    DstInputFileData%SkewMomCorr = SrcInputFileData%SkewMomCorr
+   DstInputFileData%UMM_PressureFile = SrcInputFileData%UMM_PressureFile
    DstInputFileData%SkewRedistr_Mod = SrcInputFileData%SkewRedistr_Mod
    DstInputFileData%SkewModFactor = SrcInputFileData%SkewModFactor
    DstInputFileData%TipLoss = SrcInputFileData%TipLoss
@@ -2294,6 +2296,7 @@ subroutine AD_PackInputFile(RF, Indata)
    call RegPack(RF, InData%SpdSound)
    call RegPack(RF, InData%Skew_Mod)
    call RegPack(RF, InData%SkewMomCorr)
+   call RegPack(RF, InData%UMM_PressureFile)
    call RegPack(RF, InData%SkewRedistr_Mod)
    call RegPack(RF, InData%SkewModFactor)
    call RegPack(RF, InData%TipLoss)
@@ -2376,6 +2379,7 @@ subroutine AD_UnPackInputFile(RF, OutData)
    call RegUnpack(RF, OutData%SpdSound); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%Skew_Mod); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%SkewMomCorr); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpack(RF, OutData%UMM_PressureFile); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%SkewRedistr_Mod); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%SkewModFactor); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%TipLoss); if (RegCheckErr(RF, RoutineName)) return

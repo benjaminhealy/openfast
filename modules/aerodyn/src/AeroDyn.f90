@@ -32,6 +32,7 @@ module AeroDyn
    use FVW
    use FVW_Subs, only: FVW_AeroOuts
    use IfW_FlowField, only: IfW_FlowField_GetVelAcc, IfW_UniformWind_GetOP, IfW_UniformWind_Perturb, IfW_FlowField_CopyFlowFieldType
+   use UMM_Pressure, only: UMM_Pressure_Init, UMM_Pressure_End
    
    implicit none
    private
@@ -1643,9 +1644,11 @@ subroutine AD_End( u, p, x, xd, z, OtherState, y, m, ErrStat, ErrMsg )
          end if
 
          call FVW_End( m%FVW_u, p%FVW, x%FVW, xd%FVW, z%FVW, OtherState%FVW, m%FVW_y, m%FVW, ErrStat, ErrMsg )
-      
+
       endif
-      
+
+      ! End UMM pressure module (cleanup allocatable arrays)
+      call UMM_Pressure_End()
 
          ! Close files here:
 
@@ -4710,8 +4713,17 @@ SUBROUTINE Init_BEMTmodule( InputFileData, RotInputFileData, u_AD, u, p, p_AD, x
       call cleanup()
       return
    end if
-   
-   
+
+   ! Initialize UMM pressure table if using Unified Momentum Model (SkewMomCorr=2)
+   if (InputFileData%SkewMomCorr == 2) then
+      call UMM_Pressure_Init(InputFileData%UMM_PressureFile, ErrStat2, ErrMsg2)
+      call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      if (ErrStat >= AbortErrLev) then
+         call cleanup()
+         return
+      end if
+   endif
+
    call BEMT_Init(InitInp, u, p%BEMT,  x, xd, z, OtherState, p_AD%AFI, y, m, Interval, InitOut, ErrStat2, ErrMsg2 )
       call SetErrStat(ErrStat2,ErrMsg2, ErrStat, ErrMsg, RoutineName)   
          

@@ -56,17 +56,19 @@ contains
    !!   Eq 3: Lateral outlet velocity (Eq. 3 in Liew 2et al 024)
    !!   Eq 4: Near-wake length (Eq. 4 in Liew et al 2024)
    !!   Eq 5: Outlet pressure drop (Eq. 5 in Liew et al 2024)
-   !!   Eq 6: CT-Ctprime relationship that bridges BEM k to UMM Ctprime (Eq. 6 in Liew et al 2024, modified)
+   !!   Eq 6: CT-Ctprime relationship (Eq. 6 in Liew et al 2024)
    !!
    !! @param x = (an, u4, v4, x0, dp, Ctprime)
-   !! @param k Thrust parameter from BEM solution passed by OpenFAST (Aerodyn/BEMTUncoupled.f90)
+   !! @param CT Thrust coefficient computed directly from blade element (matches MITRotor formulation)
+   !! @param k Thrust parameter from BEM (kept for comparison logging only)
    !! @param F Tip/hub loss factor
    !! @param eff_yaw Effective yaw angle [rad]
    !! @param residuals Output residuals
-   subroutine computeUMMResiduals6(x, k, F, eff_yaw, residuals)
+   subroutine computeUMMResiduals6(x, CT, k, F, eff_yaw, residuals)
       implicit none
       real(R8Ki), intent(in)  :: x(6)         !< x = (an, u4, v4, x0, dp, Ctprime)
-      real(R8Ki), intent(in)  :: k            !< Thrust parameter from BEM
+      real(R8Ki), intent(in)  :: CT           !< Thrust coefficient (direct from blade element, no sin^2(phi) singularity)
+      real(R8Ki), intent(in)  :: k            !< Thrust parameter from BEM (for comparison logging only)
       real(ReKi), intent(in)  :: F            !< Tip/hub loss factor
       real(R8Ki), intent(in)  :: eff_yaw      !< Effective yaw angle [rad]
       real(R8Ki), intent(out) :: residuals(6) !< Output residuals
@@ -75,7 +77,7 @@ contains
       real(R8Ki) :: an, u4, v4, x0_val, dp, Ctprime
       ! Intermediate calculations for system of equations (Liew et al 2024 Eq. 1 - 6)
       real(R8Ki) :: cos_eff_yaw, cos_eff_yaw2, sin_eff_yaw
-      real(R8Ki) :: CT, dp_half, p_g, p_linear
+      real(R8Ki) :: CT_used, CT_old, dp_half, p_g, p_linear
       real(R8Ki) :: term1, term2_sqrt_arg, sqrt_arg1
       real(R8Ki) :: an_new, u4_new, v4_new, x0_new, dp_new, Ctprime_new
 
@@ -108,20 +110,27 @@ contains
          return
       endif
 
-      ! Compute CT from k and current an (bridges BEM to UMM)
-      ! CT = 4*F*k*(1-an)^2
-      CT = 4.0_R8Ki * real(F, R8Ki) * k * (1.0_R8Ki - an)**2
+      ! CT calculated from velocity-based formulation to avoid numerical instabilty observed in k-based approach when phi is small
+      CT_used = CT
 
-      ! Clamp CT to physically reasonable bounds to prevent divergence with extreme k
-      CT = max(-4.0_R8Ki, min(CT, 10.0_R8Ki))
+      ! Clamp CT to physically reasonable bounds
+      CT_used = max(-4.0_R8Ki, min(CT_used, 10.0_R8Ki))
+
+      !------------------------------------------------------------------------
+      ! OLD: Compute CT from k and current an
+      ! This approach had a singularity when phi -> 0 because k = sigma*Cn/(4F*sin^2(phi))
+      ! CT = 4*F*k*(1-an)^2
+      ! CT_old = 4.0_R8Ki * real(F, R8Ki) * k * (1.0_R8Ki - an)**2
+      ! CT_old = max(-4.0_R8Ki, min(CT_old, 10.0_R8Ki))
+      !------------------------------------------------------------------------
 
       ! Get nonlinear pressure correction from table
-      ! dp = CT/2 = Δp / (ρ * u∞²) derived from AD theory:
+      ! dp = CT/2 = Δp / (rho * u_inf^2) derived from AD theory:
       !
-      ! CT = |F_t| / (0.5 * ρ * u∞² * A)
+      ! CT = |F_t| / (0.5 * rho * u_inf^2 * A)
       ! F_t = dp * A
       !
-      dp_half = CT / 2.0_R8Ki
+      dp_half = CT_used / 2.0_R8Ki
 
       ! Call bilinear interpoltation of pre-cached nonlinear pressure table at dp and x0 indices
       p_g = interpolatePressureTable(dp_half, max(x0_val, 0.01_R8Ki))
@@ -198,13 +207,14 @@ contains
       residuals(5) = dp_new - dp
 
       !------------------------------------------------------------------------
-      ! Equation 6: CT-Ctprime relationship that bridges BEM k to UMM Ctprime (Eq. 6 in Liew et al 2024, modified)
+      ! Equation 6: CT-Ctprime relationship (Eq. 6 in Liew et al 2024)
       ! Ctprime = CT / ((1-an)^2 * cos^2(yaw))
-      ! where CT = 4*F*k*(1-an)^2
-      ! This simplifies to: Ctprime = 4*F*k / cos^2(yaw)
+      !
+      ! NEW: CT is now the direct input (computed from blade element velocity formulation)
+      ! OLD: CT was computed from k as CT = 4*F*k*(1-an)^2, which had sin^2(phi) singularity
       !------------------------------------------------------------------------
       if (abs(1.0_R8Ki - an) > 1.0e-10_R8Ki) then
-         Ctprime_new = CT / ((1.0_R8Ki - an)**2 * cos_eff_yaw2)
+         Ctprime_new = CT_used / ((1.0_R8Ki - an)**2 * cos_eff_yaw2)
       else
          Ctprime_new = Ctprime  ! Error handling: keep current value to avoid division by zero
       endif
@@ -215,18 +225,20 @@ contains
    !> Get initial guess for UMM iteration using ThrustBasedUnified approach
    !! Reference: https://github.com/Howland-Lab/Unified-Momentum-Model/blob/main/UnifiedMomentumModel/Momentum.py, ThrustBasedUnified.initial_guess
    !!
-   !! @param k Thrust parameter from BEM
+   !! @param CT Thrust coefficient computed directly from blade element
+   !! @param k Thrust parameter from BEM (kept for comparison logging only)
    !! @param F Tip/hub loss factor
    !! @param eff_yaw Effective yaw angle [rad]
    !! @param x0_state Output initial state vector: (an, u4, v4, x0, dp, Ctprime)
-   subroutine getUMMInitialGuess(k, F, eff_yaw, x0_state)
+   subroutine getUMMInitialGuess(CT, k, F, eff_yaw, x0_state)
       implicit none
-      real(R8Ki), intent(in)  :: k           !< Thrust parameter from BEM
+      real(R8Ki), intent(in)  :: CT          !< Thrust coefficient (direct from blade element, no sin^2(phi) singularity)
+      real(R8Ki), intent(in)  :: k           !< Thrust parameter from BEM (for comparison logging only)
       real(ReKi), intent(in)  :: F           !< Tip/hub loss factor
       real(R8Ki), intent(in)  :: eff_yaw     !< Effective yaw angle [rad]
       real(R8Ki), intent(out) :: x0_state(6) !< Initial state vector: (an, u4, v4, x0, dp, Ctprime)
 
-      real(R8Ki) :: CT_init, an_init, Ctprime_init
+      real(R8Ki) :: CT_used, an_init, Ctprime_init
       real(R8Ki) :: cos_eff_yaw2
 
       cos_eff_yaw2 = cos(eff_yaw)**2
@@ -236,37 +248,41 @@ contains
          cos_eff_yaw2 = 1.0e-10_R8Ki
       endif
 
-      ! Initial CT estimate assuming an ≈ 1/3
+      ! CT calculated from velocity-based formulation to avoid numerical instabilty observed in k-based approach when phi is small
+      CT_used = CT
+
+      ! Clamp CT to physically reasonable bounds
+      CT_used = max(-4.0_R8Ki, min(CT_used, 10.0_R8Ki))
+
+      !------------------------------------------------------------------------
+      ! OLD (COMMENTED OUT): Initial CT estimate assuming an ≈ 1/3
       ! CT = 4*F*k*(1-an)^2 ≈ 4*F*k*(2/3)^2 = 4*F*k*(4/9) from OpenFAST BEM solution
+      ! This had the sin^2(phi) singularity embedded in k
       !
-      ! Handle CT=0 and CT < 0 scenario and avoid numerical instability and enforce turbine behavior
-      if (abs(k) < 1.0e-10_R8Ki) then
-         CT_init = 0.0_R8Ki
-      else
-         CT_init = 4.0_R8Ki * real(F, R8Ki) * k * (1.0_R8Ki - 1.0_R8Ki/3.0_R8Ki)**2
-      endif
+      ! if (abs(k) < 1.0e-10_R8Ki) then
+      !    CT_init = 0.0_R8Ki
+      ! else
+      !    CT_init = 4.0_R8Ki * real(F, R8Ki) * k * (1.0_R8Ki - 1.0_R8Ki/3.0_R8Ki)**2
+      ! endif
+      ! CT_init = max(-4.0_R8Ki, min(CT_init, 10.0_R8Ki))
+      !------------------------------------------------------------------------
 
-      ! Clamp CT_init to physically reasonable bounds
-      ! CT typically ranges 0-2 for normal operation, allowing wider range for edge cases
-      CT_init = max(-4.0_R8Ki, min(CT_init, 10.0_R8Ki))
-
-      ! Initial guess for axial induction from 1D momentum theory: a = k/(k+1)
-      ! Numerically stable formulation bounded between [-1,1], even for large k-values passed from BEMT
-      an_init = k / (k + 1.0_R8Ki)
+      ! Initial guess for axial induction
+      an_init = 0.5_R8Ki * CT_used
       an_init = max(0.0_R8Ki, min(an_init, 0.9_R8Ki))  ! Bound to reasonable range
 
       ! Initial Ctprime estimate from Eq. 6
       if (abs(1.0_R8Ki - an_init) > 1.0e-10_R8Ki .and. cos_eff_yaw2 > 1.0e-10_R8Ki) then
-         Ctprime_init = CT_init / ((1.0_R8Ki - an_init)**2 * cos_eff_yaw2)
+         Ctprime_init = CT_used / ((1.0_R8Ki - an_init)**2 * cos_eff_yaw2)
       else
-         Ctprime_init = sign(1.0_R8Ki, CT_init)  ! Just the sign if division would fail
+         Ctprime_init = sign(1.0_R8Ki, CT_used)  ! Just the sign if division would fail
       endif
 
       ! x = (an, u4, v4, x0, dp, Ctprime)
       x0_state(1) = an_init                  ! Axial induction
-      x0_state(2) = 1.0_R8Ki - CT_init       ! Streamwise outlet velocity
+      x0_state(2) = 1.0_R8Ki - CT_used       ! Streamwise outlet velocity
       x0_state(3) = 0.0_R8Ki                 ! Lateral outlet velocity (zero initially)
-      x0_state(4) = 100.0_R8Ki               ! Near-wake length (large initial value)
+      x0_state(4) = 50.0_R8Ki                ! Near-wake length
       x0_state(5) = 0.0_R8Ki                 ! Pressure drop (zero initially)
       x0_state(6) = Ctprime_init             ! Initial Ctprime estimate
 

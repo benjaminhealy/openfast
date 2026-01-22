@@ -72,6 +72,10 @@ add_library(aerodynlib STATIC
 )
 target_link_libraries(aerodynlib basicaerolib nwtclibs)
 
+# Set default UMM pressure table path at compile time (users can override in input file)
+target_compile_definitions(aerodynlib PRIVATE
+  UMM_DEFAULT_PRESSURE_FILE="${CMAKE_CURRENT_SOURCE_DIR}/data/UMM_PressureTable.dat")
+
 # ADI lib
 add_library(adilib STATIC
   src/AeroDyn_Inflow.f90
