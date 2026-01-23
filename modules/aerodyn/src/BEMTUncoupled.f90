@@ -1162,6 +1162,7 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
    real(R8Ki) :: state(6)                             !< x = (an, u4, v4, x0, dp, Ctprime)
    real(R8Ki) :: residuals(6)                         !< Residual vector
    real(R8Ki) :: max_resid                            !< Maximum absolute residual
+   real(R8Ki) :: relax_factor                         !< Adaptive relaxation factor
    integer(IntKi) :: iter                             !< Iteration counter
    logical :: converged                               !< Convergence flag
 
@@ -1290,8 +1291,8 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
 
    !---------------------------------------------------------------------------
    ! Fixed-point iteration loop
-   ! Hardcoded iteration settings from https://github.com/Howland-Lab/Unified-Momentum-Model/blob/main/UnifiedMomentumModel/Momentum.py:
-   ! max 10000 iterations, tol=1e-5, relax=0.4
+   ! Based on https://github.com/Howland-Lab/Unified-Momentum-Model/blob/main/UnifiedMomentumModel/Momentum.py
+   ! Settings: max 10000 iterations, tol=1e-5, adaptive relaxation [0.3-0.5]
    !---------------------------------------------------------------------------
    converged = .false.
    do iter = 1, UMM_MAX_ITER
@@ -1306,14 +1307,23 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
          exit
       endif
 
-      ! Update state with relaxation
-      state = state + (1.0_R8Ki - UMM_RELAXATION) * residuals
+      ! Update state with adaptive relaxation
+      ! Use more aggressive updates early, then become more conservative near convergence
+      ! to avoid oscillation in limit cycles
+      if (iter < 100) then
+         relax_factor = 0.3_R8Ki      ! More aggressive early (update = 0.7 * residual)
+      elseif (max_resid > 0.1_R8Ki) then
+         relax_factor = 0.4_R8Ki      ! Standard relaxation for large residuals
+      else
+         relax_factor = 0.5_R8Ki      ! More conservative near convergence
+      endif
+      state = state + (1.0_R8Ki - relax_factor) * residuals
 
-      ! Apply loose bounds to prevent divergence
+      ! Apply bounds to prevent divergence
       state(1) = max(-1.5_R8Ki, min(state(1), 1.5_R8Ki))    ! an: symmetric bounds for edge cases
       state(2) = max(-3.0_R8Ki, min(state(2), 2.5_R8Ki))    ! u4: widened to match an bounds (u4 ≈ 2an - 1)
       state(3) = max(-2.0_R8Ki, min(state(3), 2.0_R8Ki))    ! v4: bounded
-      state(4) = max(0.01_R8Ki, min(state(4), 1000.0_R8Ki)) ! x0: positive, bounded
+      state(4) = max(0.01_R8Ki, min(state(4), 100.0_R8Ki))  ! x0: positive, tightened upper bound
       state(5) = max(-2.0_R8Ki, min(state(5), 0.5_R8Ki))    ! dp: bounded
       state(6) = max(-10.0_R8Ki, min(state(6), 20.0_R8Ki))  ! Ctprime: bounded (tighter upper bound)
 

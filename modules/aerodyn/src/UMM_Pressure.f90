@@ -65,7 +65,7 @@ contains
       integer(IntKi) :: UnIn                  ! Unit number for file I/O
       integer(IntKi) :: ErrStat2              ! Temporary error status
       character(ErrMsgLen) :: ErrMsg2         ! Temporary error message
-      character(1024) :: Line                 ! Line buffer
+      character(4096) :: Line                 ! Line buffer (must be large enough for X axis with many values)
       integer(IntKi) :: i, j                  ! Loop indices
       integer(IntKi) :: NumDP, NumX           ! Table dimensions from file
       real(R8Ki), allocatable :: TempRow(:)   ! Temporary row for reading
