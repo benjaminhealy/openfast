@@ -20,6 +20,7 @@ import numpy as np
 import shutil
 import re
 import tempfile
+import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
@@ -48,7 +49,7 @@ YAW_ANGLES = [0, 15, 30]
 WIND_SPEEDS = [8, 12]
 
 # Paths
-WORK_DIR = '/Users/benhealy/OpenFAST/Simulations/UMM_Testing/results_comp_1x1_out_params_testing/'
+WORK_DIR = '/Users/benhealy/OpenFAST/Simulations/UMM_Testing/results_comp_UMM_updates_20260122_rev2/'
 FST_FILE = '5MW_Land_BD_DLL_WTurb_Skewed_Loads.fst'
 OUTPUT_BASE = os.path.join(WORK_DIR, '5MW_Land_BD_DLL_WTurb_Skewed_Loads')
 
@@ -343,6 +344,7 @@ def main():
     print(f"\nStarting {len(jobs)} simulations with {MAX_WORKERS} workers...")
     print("-" * 80)
 
+    start_time = time.time()
     all_results = []
     failed_jobs = []
     completed = 0
@@ -378,7 +380,10 @@ def main():
                 print(f"  [{completed:3d}/{len(jobs)}] ws={job['ws']:2d} yaw={job['yaw']:+3d}° {job['skew_name']:8s} ... EXCEPTION: {e}")
 
     print("-" * 80)
+    elapsed_time = time.time() - start_time
     print(f"Completed: {len(all_results)}/{len(jobs)} simulations")
+    print(f"Total elapsed time: {elapsed_time/60:.1f} minutes ({elapsed_time:.1f} seconds)")
+    print(f"Average per simulation: {elapsed_time/len(jobs):.1f} seconds")
     if failed_jobs:
         print(f"Failed: {len(failed_jobs)} simulations")
         for job in failed_jobs:
