@@ -41,15 +41,15 @@ SKEW_MOM_CORR = {
 }
 
 # Test matrix
-# YAW_ANGLES = [-30, -20, -15, -10, -5, 0, 5, 10, 15, 20, 30]  # degrees
-# WIND_SPEEDS = [4, 6, 8, 10, 12, 14, 16, 18]  # m/s
+YAW_ANGLES = [-30, -20, -15, -10, -5, 0, 5, 10, 15, 20, 30]  # degrees
+WIND_SPEEDS = [4, 6, 8, 10, 12, 14, 16, 18]  # m/s
 
 # Quick test (uncomment to use smaller test matrix)
-YAW_ANGLES = [0, 15, 30]
-WIND_SPEEDS = [8, 12]
+# YAW_ANGLES = [0, 15, 30]
+# WIND_SPEEDS = [8, 12]
 
 # Paths
-WORK_DIR = '/Users/benhealy/OpenFAST/Simulations/UMM_Testing/results_comp_UMM_updates_20260122_rev2/'
+WORK_DIR = '/Users/benhealy/OpenFAST/Simulations/UMM_Testing/results_comp_UMM_full_matrix_20260123/'
 FST_FILE = '5MW_Land_BD_DLL_WTurb_Skewed_Loads.fst'
 OUTPUT_BASE = os.path.join(WORK_DIR, '5MW_Land_BD_DLL_WTurb_Skewed_Loads')
 
