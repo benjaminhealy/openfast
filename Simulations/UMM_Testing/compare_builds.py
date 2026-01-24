@@ -41,8 +41,9 @@ SKEW_MOM_CORR = {
 }
 
 # Test matrix
-YAW_ANGLES = [-30, -20, -15, -10, -5, 0, 5, 10, 15, 20, 30]  # degrees
-WIND_SPEEDS = [4, 6, 8, 10, 12, 14, 16, 18]  # m/s
+# YAW_ANGLES = [-30, -20, -15, -10, -5, 0, 5, 10, 15, 20, 30]  # degrees
+YAW_ANGLES = [0, 5, 10, 15, 20, 30]  # degrees, smaller test matrix with only positive skew angles
+WIND_SPEEDS = [6, 8, 10, 12, 14, 16, 18]  # m/s
 
 # Quick test (uncomment to use smaller test matrix)
 # YAW_ANGLES = [0, 15, 30]
