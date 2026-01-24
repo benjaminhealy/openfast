@@ -76,12 +76,21 @@ OUTPUT_COLS = ['GenPwr', 'RtAeroCp', 'RtAeroCt', 'RtAeroFxh', 'B1RootMyr',
                'YawBrMzp', 'TwrBsMyt', 'RotSpeed', 'RtTSR', 'B1N1AxInd',
                'B1N2AxInd', 'B1N3AxInd', 'B1N4AxInd', 'B1N5AxInd', 'B1N6AxInd',
                'B1N7AxInd', 'B1N8AxInd', 'B1N9AxInd', 'B1Pitch']
-'''
+
 OUTPUT_COLS = ['GenPwr', 'RtAeroCp', 'RtAeroCt', 'RtAeroFxh', 'B1RootMyr',
                'YawBrMzp', 'TwrBsMyt', 'RotSpeed', 'RtTSR', 'B1N1AxInd',
                'B1N2AxInd', 'B1N3AxInd', 'B1N4AxInd', 'B1N5AxInd', 'B1N6AxInd',
                'B1N7AxInd', 'B1N8AxInd', 'B1N9AxInd', 'B1Pitch', 'B1Azimuth']
+'''
 
+OUTPUT_COLS = ['GenPwr', 'RtAeroCp', 'RtAeroCt', 'RtAeroFxh', 'B1RootMyr',
+               'YawBrMzp', 'TwrBsMyt', 'RotSpeed', 'RtTSR', 
+               'B1N1AxInd', 'B1N2AxInd', 'B1N3AxInd', 'B1N4AxInd', 
+               'B1N5AxInd', 'B1N6AxInd', 'B1N7AxInd', 'B1N8AxInd', 'B1N9AxInd', # axial induction at blade nodes
+               'B1N1TnInd', 'B1N5TnInd', 'B1N9TnInd',  # tangential induction at blade nodes
+               'B1N1Alpha', 'B1N5Alpha', 'B1N9Alpha',  # angle of attack
+               'B1N1Cl', 'B1N5Cl', 'B1N9Cl',          # lift coefficient
+               'B1Pitch', 'B1Azimuth']
 
 # ============================================================================
 # UTILITY FUNCTIONS
@@ -128,19 +137,46 @@ def setup_aerodyn(aerodyn_path, wind_speed, skew_corr):
 
 
 
-def setup_elastodyn(elastodyn_path, wind_speed):
-    """Configure ElastoDyn initial conditions"""
-    target_tsr = 8.0
-    rotor_radius = 63.0
-    rated_speed = 12.1
+def get_initial_pitch(wind_speed):
+    """Get initial blade pitch for NREL 5MW based on wind speed.
+
+    Below rated: 0° (fine pitch for max Cp)
+    Above rated: Increases roughly linearly to limit power
+
+    Based on NREL 5MW steady-state operating points.
+    """
     rated_wind_speed = 11.4
 
+    if wind_speed <= rated_wind_speed:
+        return 0.0
+    else:
+        # Approximate pitch schedule above rated
+        # Roughly 0° at 11.4 m/s, ~6° at 14 m/s, ~12° at 18 m/s, ~23° at 25 m/s
+        # Linear approximation: pitch ≈ 1.7 * (V - 11.4)
+        pitch = 1.7 * (wind_speed - rated_wind_speed)
+        return min(pitch, 25.0)  # Cap at 25°
+
+
+def setup_elastodyn(elastodyn_path, wind_speed):
+    """Configure ElastoDyn initial conditions"""
+    target_tsr = 7.55  # Optimal TSR for NREL 5MW (was 8.0)
+    rotor_radius = 63.0
+    rated_speed = 12.1  # rpm
+    rated_wind_speed = 11.4
+
+    # Calculate rotor speed from TSR, capped at rated
     rotor_speed = (target_tsr * wind_speed * 60.0) / (rotor_radius * 2.0 * np.pi)
     if wind_speed > rated_wind_speed:
         rotor_speed = min(rotor_speed, rated_speed)
 
+    # Get initial pitch based on operating region
+    initial_pitch = get_initial_pitch(wind_speed)
+
     modify_parameter(elastodyn_path, 'RotSpeed', f'{rotor_speed:.2f}')
     modify_parameter(elastodyn_path, 'NacYaw', '0.0')
+    modify_parameter(elastodyn_path, 'BlPitch(1)', f'{initial_pitch:.2f}')
+    modify_parameter(elastodyn_path, 'BlPitch(2)', f'{initial_pitch:.2f}')
+    modify_parameter(elastodyn_path, 'BlPitch(3)', f'{initial_pitch:.2f}')
 
 
 def setup_servodyn(servodyn_path, target_yaw_angle):
