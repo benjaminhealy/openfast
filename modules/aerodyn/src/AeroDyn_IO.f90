@@ -884,18 +884,9 @@ SUBROUTINE ParsePrimaryFileInfo( PriPath, InitInp, InputFile, RootName, NumBlade
       InputFileData%SkewMomCorr = 0
    endif
 
-   ! UMM_PressureFile - Path to UMM pressure table file [used when SkewMomCorr=2]
-   ! If not specified, uses default path set at compile time
+   ! UMM_PressureFile - use hardcoded compile-time default path (no input file option)
    if (InputFileData%SkewMomCorr == 2) then
-      call ParseVar( FileInfo_In, CurLine, "UMM_PressureFile", InputFileData%UMM_PressureFile, ErrStat2, ErrMsg2, UnEc )
-      if (newInputMissing('UMM_PressureFile', CurLine, errStat2, errMsg2)) then
-         ! Use compile-time default path
-         InputFileData%UMM_PressureFile = UMM_DEFAULT_PRESSURE_FILE
-         CurLine = CurLine - 1  ! Revert line counter since variable wasn't on this line
-      else
-         ! User specified a path - handle relative paths
-         if ( PathIsRelative( InputFileData%UMM_PressureFile ) ) InputFileData%UMM_PressureFile = TRIM(PriPath)//TRIM(InputFileData%UMM_PressureFile)
-      endif
+      InputFileData%UMM_PressureFile = UMM_DEFAULT_PRESSURE_FILE
    else
       InputFileData%UMM_PressureFile = ''
    endif
