@@ -1257,7 +1257,7 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
       ! and includes the same coning/skew corrections as applied to k in inductionFactors2
       CT_direct = sigma_p * real(cn,R8Ki) * Vrel_sq / (VxCorrected**2) * drdz
 
-      ! Divide BEM-computed Ct by F to account for tip loss before passing to UMM;
+      ! Divide BEM-computed Ct by F to account for tip loss before passing to UMM
       ! This approach is consistent with the quartic polynomial for the Glauert BEMT coupling
       ! Use F floor of 0.01 to match MITRotor's effective minimum (~0.009 from arccos clipping)
       ! Note: OpenFAST's global F floor is 0.0001, but that causes CT/F to blow up near tip in UMM coupling
@@ -1265,7 +1265,7 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
 
       ! Clamp CT to physical Betz limit region [0, ~1.7] with margin for high-thrust states, similar to MITRotor
       CT_direct = max(0.0_R8Ki, min(CT_direct, 1.69_R8Ki)
-      
+
       !------------------------------------------------------------------------
       ! OLD (for comparison): CT computed from k (has sin^2(phi) singularity)
       ! CT_old = 4*F*k*(1-a)^2 with a estimated from 1D momentum
