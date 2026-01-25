@@ -1264,7 +1264,7 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
       CT_direct = CT_direct / max(real(F, R8Ki), 0.01_R8Ki)
 
       ! Clamp CT to physical Betz limit region [0, ~1.7] with margin for high-thrust states, similar to MITRotor
-      CT_direct = max(0.0_R8Ki, min(CT_direct, 1.69_R8Ki)
+      CT_direct = max(0.0_R8Ki, min(CT_direct, 1.69_R8Ki))
 
       !------------------------------------------------------------------------
       ! OLD (for comparison): CT computed from k (has sin^2(phi) singularity)
