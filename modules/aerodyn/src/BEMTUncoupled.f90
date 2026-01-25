@@ -1259,11 +1259,13 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
 
       ! Divide BEM-computed Ct by F to account for tip loss before passing to UMM;
       ! This approach is consistent with the quartic polynomial for the Glauert BEMT coupling
-      CT_direct = CT_direct / real(F, R8Ki)
+      ! Use F floor of 0.01 to match MITRotor's effective minimum (~0.009 from arccos clipping)
+      ! Note: OpenFAST's global F floor is 0.0001, but that causes CT/F to blow up near tip in UMM coupling
+      CT_direct = CT_direct / max(real(F, R8Ki), 0.01_R8Ki)
 
-      ! Clamp CT to physically reasonable bounds
-      CT_direct = max(-4.0_R8Ki, min(CT_direct, 10.0_R8Ki))
-
+      ! Clamp CT to physical Betz limit region [0, ~1.7] with margin for high-thrust states, similar to MITRotor
+      CT_direct = max(0.0_R8Ki, min(CT_direct, 1.69_R8Ki)
+      
       !------------------------------------------------------------------------
       ! OLD (for comparison): CT computed from k (has sin^2(phi) singularity)
       ! CT_old = 4*F*k*(1-a)^2 with a estimated from 1D momentum
