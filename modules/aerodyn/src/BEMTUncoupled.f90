@@ -29,6 +29,7 @@ module BEMTUnCoupled
    use PolynomialRoots
    use UMM_Pressure
    use UMM_FixedPointIteration
+   ! use UMM_NewtonRaphson  ! Disabled - Newton-Raphson had convergence issues
 
 
    implicit none
@@ -1256,6 +1257,10 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
       ! and includes the same coning/skew corrections as applied to k in inductionFactors2
       CT_direct = sigma_p * real(cn,R8Ki) * Vrel_sq / (VxCorrected**2) * drdz
 
+      ! Divide BEM-computed Ct by F to account for tip loss before passing to UMM;
+      ! This approach is consistent with the quartic polynomial for the Glauert BEMT coupling
+      CT_direct = CT_direct / real(F, R8Ki)
+
       ! Clamp CT to physically reasonable bounds
       CT_direct = max(-4.0_R8Ki, min(CT_direct, 10.0_R8Ki))
 
@@ -1308,24 +1313,22 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
       endif
 
       ! Update state with adaptive relaxation
-      ! Use more aggressive updates early, then become more conservative near convergence
-      ! to avoid oscillation in limit cycles
       if (iter < 100) then
-         relax_factor = 0.3_R8Ki      ! More aggressive early (update = 0.7 * residual)
+         relax_factor = 0.3_R8Ki
       elseif (max_resid > 0.1_R8Ki) then
-         relax_factor = 0.4_R8Ki      ! Standard relaxation for large residuals
+         relax_factor = 0.4_R8Ki
       else
-         relax_factor = 0.5_R8Ki      ! More conservative near convergence
+         relax_factor = 0.5_R8Ki
       endif
       state = state + (1.0_R8Ki - relax_factor) * residuals
 
       ! Apply bounds to prevent divergence
-      state(1) = max(-1.5_R8Ki, min(state(1), 1.5_R8Ki))    ! an: symmetric bounds for edge cases
-      state(2) = max(-3.0_R8Ki, min(state(2), 2.5_R8Ki))    ! u4: widened to match an bounds (u4 ≈ 2an - 1)
-      state(3) = max(-2.0_R8Ki, min(state(3), 2.0_R8Ki))    ! v4: bounded
-      state(4) = max(0.01_R8Ki, min(state(4), 100.0_R8Ki))  ! x0: positive, tightened upper bound
-      state(5) = max(-2.0_R8Ki, min(state(5), 0.5_R8Ki))    ! dp: bounded
-      state(6) = max(-10.0_R8Ki, min(state(6), 20.0_R8Ki))  ! Ctprime: bounded (tighter upper bound)
+      state(1) = max(-1.5_R8Ki, min(state(1), 1.5_R8Ki))
+      state(2) = max(-3.0_R8Ki, min(state(2), 2.5_R8Ki))
+      state(3) = max(-2.0_R8Ki, min(state(3), 2.0_R8Ki))
+      state(4) = max(0.01_R8Ki, min(state(4), 100.0_R8Ki))
+      state(5) = max(-2.0_R8Ki, min(state(5), 0.5_R8Ki))
+      state(6) = max(-10.0_R8Ki, min(state(6), 20.0_R8Ki))
 
    end do
 

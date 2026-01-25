@@ -891,6 +891,7 @@ SUBROUTINE ParsePrimaryFileInfo( PriPath, InitInp, InputFile, RootName, NumBlade
       if (newInputMissing('UMM_PressureFile', CurLine, errStat2, errMsg2)) then
          ! Use compile-time default path
          InputFileData%UMM_PressureFile = UMM_DEFAULT_PRESSURE_FILE
+         CurLine = CurLine - 1  ! Revert line counter since variable wasn't on this line
       else
          ! User specified a path - handle relative paths
          if ( PathIsRelative( InputFileData%UMM_PressureFile ) ) InputFileData%UMM_PressureFile = TRIM(PriPath)//TRIM(InputFileData%UMM_PressureFile)

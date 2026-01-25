@@ -30,7 +30,8 @@ from pathlib import Path
 
 # Build to use (single build, iterate SkewMomCorr at runtime)
 BUILDS = {
-    'UMM': '/Users/benhealy/OpenFAST/build-UMM/glue-codes/openfast/openfast',
+    # 'UMM': '/Users/benhealy/OpenFAST/build-UMM/glue-codes/openfast/openfast',
+    'UMM': '/Users/benhealy/OpenFAST/build-UMM-rev2/glue-codes/openfast/openfast',
 }
 
 # SkewMomCorr settings to compare
@@ -42,15 +43,15 @@ SKEW_MOM_CORR = {
 
 # Test matrix
 # YAW_ANGLES = [-30, -20, -15, -10, -5, 0, 5, 10, 15, 20, 30]  # degrees
-YAW_ANGLES = [0, 5, 10, 15, 20, 30]  # degrees, smaller test matrix with only positive skew angles
-WIND_SPEEDS = [6, 8, 10, 12, 14, 16, 18]  # m/s
+# YAW_ANGLES = [0, 5, 10, 15, 20, 30]  # degrees, smaller test matrix with only positive skew angles
+# WIND_SPEEDS = [6, 8, 10, 12, 14, 16, 18]  # m/s
 
 # Quick test (uncomment to use smaller test matrix)
-# YAW_ANGLES = [0, 15, 30]
-# WIND_SPEEDS = [8, 12]
+YAW_ANGLES = [0, 15, 30]
+WIND_SPEEDS = [8, 12]
 
 # Paths
-WORK_DIR = '/Users/benhealy/OpenFAST/Simulations/UMM_Testing/results_comp_UMM_full_matrix_20260123/'
+WORK_DIR = '/Users/benhealy/OpenFAST/Simulations/UMM_Testing/results_comp_UMM_tiploss_checks_20260124/'
 FST_FILE = '5MW_Land_BD_DLL_WTurb_Skewed_Loads.fst'
 OUTPUT_BASE = os.path.join(WORK_DIR, '5MW_Land_BD_DLL_WTurb_Skewed_Loads')
 
@@ -102,7 +103,7 @@ def modify_parameter(filepath, param_name, new_value):
     with open(filepath, 'r') as f:
         lines = f.readlines()
 
-    pattern = r'^(\s*)(\S+?)(\s*' + re.escape(param_name) + r'\b)'
+    pattern = r'^(\s*)(\S+?)(\s+' + re.escape(param_name) + r')(?=\s|$)'
     modified = False
 
     for i, line in enumerate(lines):
