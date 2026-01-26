@@ -22,7 +22,7 @@ False                  CompAA      - Flag to compute AeroAcoustics calculation [
 2                      BEM_Mod     - BEM model {1=legacy NoSweepPitchTwist, 2=polar} (switch) [used for all Wake_Mod to determine output coordinate system]
 --- Skew correction
 1                      Skew_Mod    - Skew model {0=No skew model, -1=Remove non-normal component for linearization, 1=skew model active}
-True                      SkewMomCorr - Skew Momentum Correction {0=Axial Theory, 1 = Glauert Momentum Theory, 2 = Unified Momentum Model (Liew et al. 2024)}
+2                      SkewMomCorr - Skew Momentum Correction {0=Axial Theory, 1 = Glauert Momentum Theory, 2 = Unified Momentum Model (Liew et al. 2024)}
 1                SkewRedistr_Mod - Type of skewed-wake correction model (switch) {0=no redistribution, 1=Glauert/Pitt/Peters, default=1} [used only when Skew_Mod=1]
 "default"              SkewRedistrFactor - Constant used in Pitt/Peters skewed wake model {or "default" is 15/32*pi} (-) [used only when Skew_Mod=1 and SkewRedistr_Mod=1]
 --- BEM algorithm 
@@ -102,8 +102,8 @@ TwrElev        TwrDiam        TwrCd          TwrTI          TwrCb         ! TwrT
 8.7600000E+01  3.8700000E+00  1.0000000E+00  1.0000000E-01  0.0000000E+00
 ======  Outputs  ====================================================================================
 True                   SumPrint    - Generate a summary file listing input options and interpolated properties to "<rootname>.AD.sum"? (flag)
-3                      NBlOuts     - Number of blade node outputs [0 - 9] (-)
-1, 9, 19               BlOutNd     - Blade nodes whose values will be output (-)
+9                      NBlOuts     - Number of blade node outputs [0 - 9] (-)
+1, 2, 3, 4, 5, 6, 7, 8, 9    BlOutNd     - Blade nodes whose values will be output (-)
 3                      NTwOuts     - Number of tower node outputs [0 - 9] (-)
 1, 2, 6                TwOutNd     - Tower nodes whose values will be output (-)
                        OutList     - The next line(s) contains a list of output parameters.  See OutListParameters.xlsx for a listing of available output channels, (-)
@@ -125,6 +125,24 @@ RtAeroCp       ! Rotor aerodynamic/hydrodynamic power coefficient               
 RtAeroCq       ! Rotor aerodynamic/hydrodynamic torque coefficient                                 (-)
 RtAeroCt       ! Rotor aerodynamic/hydrodynamic thrust coefficient                                 (-)
 DBEMTau1       ! Time-constant used in DBEMT                                                       (s)
+B1N1AxInd      ! Blade 1 Node 1 axial induction                                                (-)
+B1N2AxInd      ! Blade 1 Node 2 axial induction                                                (-)
+B1N3AxInd      ! Blade 1 Node 3 axial induction                                                (-)
+B1N4AxInd      ! Blade 1 Node 4 axial induction                                                (-)
+B1N5AxInd      ! Blade 1 Node 5 axial induction                                                (-)
+B1N6AxInd      ! Blade 1 Node 6 axial induction                                                (-)
+B1N7AxInd      ! Blade 1 Node 7 axial induction                                                (-)
+B1N8AxInd      ! Blade 1 Node 8 axial induction                                                (-)
+B1N9AxInd      ! Blade 1 Node 9 axial induction                                                (-)
+B1N1TnInd      ! Blade 1 Node 1 tangential induction                                              (-)
+B1N5TnInd      ! Blade 1 Node 5 tangential induction                                              (-)
+B1N9TnInd      ! Blade 1 Node 9 tangential induction                                              (-)
+B1N1Alpha      ! Blade 1 Node 1 angle of attack                                                   (deg)
+B1N5Alpha      ! Blade 1 Node 5 angle of attack                                                   (deg)
+B1N9Alpha      ! Blade 1 Node 9 angle of attack                                                   (deg)
+B1N1Cl         ! Blade 1 Node 1 lift coefficient                                                  (-)
+B1N5Cl         ! Blade 1 Node 5 lift coefficient                                                  (-)
+B1N9Cl         ! Blade 1 Node 9 lift coefficient                                                  (-)
 END of OutList section (the word "END" must appear in the first 3 columns of the last OutList line)
 ---------------------- NODE OUTPUTS --------------------------------------------
 1                      BldNd_BladesOut  - Number of blades to output all node information at.  Up to number of blades on turbine. (-)

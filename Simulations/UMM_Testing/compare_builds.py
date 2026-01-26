@@ -41,17 +41,16 @@ SKEW_MOM_CORR = {
     'UMM': 2,       # Unified Momentum Model (Liew et al 2024)
 }
 
-# Test matrix
-# YAW_ANGLES = [-30, -20, -15, -10, -5, 0, 5, 10, 15, 20, 30]  # degrees
-# YAW_ANGLES = [0, 5, 10, 15, 20, 30]  # degrees, smaller test matrix with only positive skew angles
-# WIND_SPEEDS = [6, 8, 10, 12, 14, 16, 18]  # m/s
+# Test matrix - FULL MATRIX for comprehensive validation
+YAW_ANGLES = [-30, -20, -15, -10, -5, 0, 5, 10, 15, 20, 30]  # degrees
+WIND_SPEEDS = [6, 8, 10, 12, 14, 16, 18]  # m/s
 
-# Quick test (uncomment to use smaller test matrix)
-YAW_ANGLES = [0, 15, 30]
-WIND_SPEEDS = [8, 12]
+# Quick test (comment out above and uncomment below for quick validation)
+# YAW_ANGLES = [0, 15, 30]
+# WIND_SPEEDS = [8]
 
 # Paths
-WORK_DIR = '/Users/benhealy/OpenFAST/Simulations/UMM_Testing/results_comp_UMM_tiploss_checks_20260124_rev2/'
+WORK_DIR = '/Users/benhealy/OpenFAST/Simulations/UMM_Testing/results_comp_UMM_full_matrix_20260123/'
 FST_FILE = '5MW_Land_BD_DLL_WTurb_Skewed_Loads.fst'
 OUTPUT_BASE = os.path.join(WORK_DIR, '5MW_Land_BD_DLL_WTurb_Skewed_Loads')
 
@@ -85,14 +84,38 @@ OUTPUT_COLS = ['GenPwr', 'RtAeroCp', 'RtAeroCt', 'RtAeroFxh', 'B1RootMyr',
                'B1N7AxInd', 'B1N8AxInd', 'B1N9AxInd', 'B1Pitch', 'B1Azimuth']
 '''
 
-OUTPUT_COLS = ['GenPwr', 'RtAeroCp', 'RtAeroCt', 'RtAeroFxh', 'B1RootMyr',
-               'YawBrMzp', 'TwrBsMyt', 'RotSpeed', 'RtTSR', 
-               'B1N1AxInd', 'B1N2AxInd', 'B1N3AxInd', 'B1N4AxInd', 
-               'B1N5AxInd', 'B1N6AxInd', 'B1N7AxInd', 'B1N8AxInd', 'B1N9AxInd', # axial induction at blade nodes
-               'B1N1TnInd', 'B1N5TnInd', 'B1N9TnInd',  # tangential induction at blade nodes
-               'B1N1Alpha', 'B1N5Alpha', 'B1N9Alpha',  # angle of attack
-               'B1N1Cl', 'B1N5Cl', 'B1N9Cl',          # lift coefficient
-               'B1Pitch', 'B1Azimuth']
+# Performance outputs (AeroDyn)
+OUTPUT_COLS_PERFORMANCE = [
+    'GenPwr', 'RtAeroCp', 'RtAeroCt', 'RtAeroFxh', 'RotSpeed', 'RtTSR',
+    'B1N1AxInd', 'B1N2AxInd', 'B1N3AxInd', 'B1N4AxInd',
+    'B1N5AxInd', 'B1N6AxInd', 'B1N7AxInd', 'B1N8AxInd', 'B1N9AxInd',  # axial induction
+    'B1N1TnInd', 'B1N5TnInd', 'B1N9TnInd',  # tangential induction
+    'B1N1Alpha', 'B1N5Alpha', 'B1N9Alpha',  # angle of attack
+    'B1N1Cl', 'B1N5Cl', 'B1N9Cl',           # lift coefficient
+    'B1Pitch', 'B1Azimuth',
+]
+
+# DEL/fatigue outputs - for damage-equivalent load analysis
+# Note: BeamDyn outputs (B1RootMxr, etc.) used when CompElast=2
+OUTPUT_COLS_DEL = [
+    # Blade root moments from BeamDyn (m=10 for composites, units: N-m)
+    'B1RootMxr', 'B1RootMyr', 'B1RootMzr',  # Blade 1 root moments
+    'B2RootMxr', 'B2RootMyr', 'B2RootMzr',  # Blade 2 root moments
+    'B3RootMxr', 'B3RootMyr', 'B3RootMzr',  # Blade 3 root moments
+    # Tower base moments (m=4 for steel, units: kN-m)
+    'TwrBsMxt', 'TwrBsMyt', 'TwrBsMzt',
+    # Shaft loads (m=4 for steel, units: kN-m)
+    'LSShftMxa', 'LSSTipMya', 'LSSTipMza',
+    # Yaw bearing (units: kN-m)
+    'YawBrMxp', 'YawBrMyp', 'YawBrMzp',
+]
+
+# Combined output columns for steady-state extraction
+OUTPUT_COLS = OUTPUT_COLS_PERFORMANCE + OUTPUT_COLS_DEL
+
+# Output file preservation settings
+PRESERVE_OUT_FILES = True      # Set to True to keep .out files for DEL post-processing
+OUT_FILES_SUBDIR = 'out_files'  # Subdirectory for preserved .out files
 
 # ============================================================================
 # UTILITY FUNCTIONS
@@ -182,16 +205,36 @@ def setup_elastodyn(elastodyn_path, wind_speed):
 
 
 def setup_servodyn(servodyn_path, target_yaw_angle):
-    """Configure ServoDyn for yaw maneuver"""
-    modify_parameter(servodyn_path, 'TYawManS', '25.0')
-    modify_parameter(servodyn_path, 'YawManRat', '2.0')
+    """Configure ServoDyn for yaw maneuver.
+
+    Fast yaw ramp: start at t=2s, rate=10 deg/s
+    - Allows initial transients to settle before yaw begins
+    - 30° yaw reached by t=5s (vs t=40s with old 2 deg/s rate)
+    - More simulation time available for steady-state analysis
+    """
+    modify_parameter(servodyn_path, 'TYawManS', '2.0')
+    modify_parameter(servodyn_path, 'YawManRat', '10.0')
     modify_parameter(servodyn_path, 'NacYawF', f'{target_yaw_angle:.1f}')
 
 
 def calculate_sim_time(yaw_angle):
-    """Calculate simulation time based on yaw angle"""
-    total_time = 25.0 + abs(yaw_angle) / 2.0 + 30.0
-    return max(55.0, np.ceil(total_time / 5.0) * 5.0)
+    """Calculate simulation time based on yaw angle.
+
+    Fast yaw ramp components:
+        2s   - TYawManS (yaw maneuver start, initial transients settle)
+        yaw/10 - yaw maneuver duration at 10 deg/s
+        5s   - controller settling time after yaw complete
+        55s  - steady-state time for DEL analysis (~8 rotations at 8-9 rpm)
+
+    Example timings:
+        0° yaw:  2 + 0 + 5 + 55 = 62s -> 65s
+        15° yaw: 2 + 1.5 + 5 + 55 = 63.5s -> 65s
+        30° yaw: 2 + 3 + 5 + 55 = 65s -> 65s
+
+    Max TMax capped at 70s for reasonable simulation time.
+    """
+    total_time = 2.0 + abs(yaw_angle) / 10.0 + 5.0 + 55.0
+    return min(70.0, max(60.0, np.ceil(total_time / 5.0) * 5.0))
 
 
 def run_openfast(fst_file, work_dir, exe_path):
@@ -325,6 +368,16 @@ def run_simulation_job(job_config):
         ss_values['yaw'] = yaw
         ss_values['ws'] = ws
 
+        # Preserve .out file for DEL post-processing if enabled
+        if PRESERVE_OUT_FILES:
+            out_subdir = os.path.join(base_work_dir, OUT_FILES_SUBDIR)
+            os.makedirs(out_subdir, exist_ok=True)
+            # Create unique filename: {skew_corr}_ws{ws}_yaw{yaw}.out
+            preserved_filename = f"{skew_name}_ws{ws}_yaw{yaw}.out"
+            preserved_path = os.path.join(out_subdir, preserved_filename)
+            shutil.copy2(output_file, preserved_path)
+            ss_values['out_file'] = preserved_path
+
         return ss_values
 
     except Exception as e:
@@ -337,7 +390,7 @@ def run_simulation_job(job_config):
             'error': str(e)
         }
     finally:
-        # Cleanup temp directory
+        # Cleanup temp directory (always, since we've already copied the .out file)
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 

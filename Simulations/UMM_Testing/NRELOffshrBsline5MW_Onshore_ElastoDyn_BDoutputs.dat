@@ -154,6 +154,18 @@ True          TabDelim    - Use tab delimiters in text tabular output file? (fla
 "TwrBsMxt"                - Side-to-side bending, fore-aft bending, and yaw moments at the base of the tower (mudline)
 "TwrBsMyt"                - Side-to-side bending, fore-aft bending, and yaw moments at the base of the tower (mudline)
 "TwrBsMzt"                - Side-to-side bending, fore-aft bending, and yaw moments at the base of the tower (mudline)
+"RootMxc1"                - Blade 1 edgewise root moment (coned coords)
+"RootMyc1"                - Blade 1 flapwise root moment (coned coords)
+"RootMzc1"                - Blade 1 pitching root moment (coned coords)
+"RootMxc2"                - Blade 2 edgewise root moment (coned coords)
+"RootMyc2"                - Blade 2 flapwise root moment (coned coords)
+"RootMzc2"                - Blade 2 pitching root moment (coned coords)
+"RootMxc3"                - Blade 3 edgewise root moment (coned coords)
+"RootMyc3"                - Blade 3 flapwise root moment (coned coords)
+"RootMzc3"                - Blade 3 pitching root moment (coned coords)
+"LSShftMxa"               - Low-speed shaft torque
+"LSSTipMya"               - Shaft bending moment My
+"LSSTipMza"               - Shaft bending moment Mz
 END of input file (the word "END" must appear in the first 3 columns of this last OutList line)
 ====== Outputs for all blade stations (same ending as above for Spn1.... =========================== [optional section]
           1   BldNd_BladesOut     - Number of blades to output all node information at.  Up to number of blades on turbine. (-)

@@ -54,8 +54,8 @@ True          GenTiStp     - Method to stop the generator {T: timed using TimGen
           0   YawNeut      - Neutral yaw position--yaw spring force is zero at this yaw (degrees)
 9.02832E+09   YawSpr       - Nacelle-yaw spring constant (N-m/rad)
    19160000   YawDamp      - Nacelle-yaw damping constant (N-m/(rad/s))
-     	  25.0   TYawManS     - Time to start override yaw maneuver and end standard yaw control (s)
-          2.0   YawManRat    - Yaw maneuver rate (in absolute value) (deg/s)
+     	  2.0   TYawManS     - Time to start override yaw maneuver and end standard yaw control (s)
+          10.0   YawManRat    - Yaw maneuver rate (in absolute value) (deg/s)
 15.0   NacYawF   -   Final   yaw   angle   for   override   yaw   maneuvers   (degrees)
 ---------------------- AERODYNAMIC FLOW CONTROL --------------------------------
           0   AfCmode      - Airfoil control mode {0: none, 1: cosine wave cycle, 4: user-defined from Simulink/Labview, 5: user-defined from Bladed-style DLL} (switch)
