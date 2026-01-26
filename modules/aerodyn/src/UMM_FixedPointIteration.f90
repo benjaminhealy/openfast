@@ -77,7 +77,7 @@ contains
       real(R8Ki) :: an, u4, v4, x0_val, dp, Ctprime
       ! Intermediate calculations for system of equations (Liew et al 2024 Eq. 1 - 6)
       real(R8Ki) :: cos_eff_yaw, cos_eff_yaw2, sin_eff_yaw
-      real(R8Ki) :: CT_used, CT_old, dp_half, p_g, p_linear
+      real(R8Ki) :: CT_used, CT_iter, dp_half, p_g, p_linear
       real(R8Ki) :: term1, term2_sqrt_arg, sqrt_arg1
       real(R8Ki) :: an_new, u4_new, v4_new, x0_new, dp_new, Ctprime_new
 
@@ -125,14 +125,18 @@ contains
       !------------------------------------------------------------------------
 
       ! Get nonlinear pressure correction from table
-      ! dp = CT/2 = Δp / (rho * u_inf^2) derived from AD theory:
+      ! Following MITRotor reference: CT for pressure lookup is computed from current
+      ! iteration values of Ctprime and an
+      ! This matches _nonlinear_pressure() in MITRotor/UnifiedMomentumModel/Momentum.py:302-305
       !
-      ! CT = |F_t| / (0.5 * rho * u_inf^2 * A)
-      ! F_t = dp * A
+      ! CT_iter = Ctprime * (1-an)^2 * cos^2(yaw)
+      ! dp_half = CT_iter / 2
       !
-      dp_half = CT_used / 2.0_R8Ki
+      CT_iter = Ctprime * (1.0_R8Ki - an)**2 * cos_eff_yaw2
+      CT_iter = max(-4.0_R8Ki, min(CT_iter, 10.0_R8Ki))  ! Clamp to reasonable bounds
+      dp_half = CT_iter / 2.0_R8Ki
 
-      ! Call bilinear interpoltation of pre-cached nonlinear pressure table at dp and x0 indices
+      ! Call bilinear interpolation of pre-cached nonlinear pressure table at dp and x0 indices
       p_g = interpolatePressureTable(dp_half, max(x0_val, 0.01_R8Ki))
 
       !------------------------------------------------------------------------
