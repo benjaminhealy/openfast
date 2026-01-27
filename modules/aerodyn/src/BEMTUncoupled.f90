@@ -78,6 +78,9 @@ module BEMTUnCoupled
    public :: UMM_ResetBrentSolveStats
    public :: UMM_IncrementBrentEvalCount
    public :: UMM_LogBrentConvergence
+   public :: BEMTU_ComputeLocalCT
+   public :: axialInductionFromUnifiedMomentum_RotorAvg
+   public :: getTangentialInduction
 contains
    
 !..................................................................................................................................   
@@ -528,6 +531,92 @@ real(ReKi) function BEMTU_InductionWithResidual(p, u, i, j, phi, AFInfo, IsValid
    if (present(F_out))  F_out = F
    
 end function BEMTU_InductionWithResidual
+!-----------------------------------------------------------------------------------------
+!> Compute local thrust coefficient CT and tip-loss factor F
+!! This is used for rotor averaging before calling UMM
+!! CT formula matches MITRotor exactly: C_x = σ * W² * C_n
+!! where W is the INDUCED velocity magnitude (normalized by freestream)
+!! - Uses INDUCED velocities: Vax = Vx*(1-a), Vtan = Vy*(1+a')
+!! - NO division by Vx² (avoids yaw inflation problem)
+!! - Normalization is by freestream U² which is passed in
+subroutine BEMTU_ComputeLocalCT(p, u, i, j, phi, a_rotor, ap_local, U_ref_sq, AFInfo, CT_local, Cy_local, F, ErrStat, ErrMsg)
+   type(BEMT_ParameterType), intent(in)  :: p
+   type(BEMT_InputType),     intent(in)  :: u
+   integer(IntKi),           intent(in)  :: i, j
+   real(ReKi),               intent(in)  :: phi
+   real(ReKi),               intent(in)  :: a_rotor    ! Rotor-averaged axial induction
+   real(ReKi),               intent(in)  :: ap_local   ! Local tangential induction
+   real(ReKi),               intent(in)  :: U_ref_sq   ! Reference freestream velocity squared for normalization
+   type(AFI_ParameterType),  intent(in)  :: AFInfo
+   real(ReKi),               intent(out) :: CT_local  ! Local thrust coefficient
+   real(ReKi),               intent(out) :: Cy_local  ! Local tangential force coefficient (for tangential induction)
+   real(ReKi),               intent(out) :: F         ! Tip-loss factor
+   integer(IntKi),           intent(out) :: ErrStat
+   character(*),             intent(out) :: ErrMsg
+
+   ! Local variables
+   real(ReKi) :: AOA, Re, Cx, Cy, Cz, dumX, dumY, dumZ
+   real(ReKi) :: sigma_p, W_sq, VxCorrected, VxInd, VyInd
+   TYPE(AFI_OutputType) :: AFI_interp
+   integer(IntKi) :: ErrStat2
+   character(ErrMsgLen) :: ErrMsg2
+   character(*), parameter :: RoutineName = 'BEMTU_ComputeLocalCT'
+
+   ErrStat = ErrID_None
+   ErrMsg = ""
+   CT_local = 0.0_ReKi
+   Cy_local = 0.0_ReKi
+   F = 1.0_ReKi
+
+   ! Skip invalid elements
+   if (p%FixedInductions(i,j) .or. EqualRealNos(phi, 0.0_ReKi) .or. &
+       VelocityIsZero(u%Vx(i,j)) .or. VelocityIsZero(u%Vy(i,j))) return
+
+   ! Compute AOA and airfoil coefficients
+   call computeAirfoilOperatingAOA(p%BEM_Mod, phi, u%theta(i,j), u%cantAngle(i,j), u%toeAngle(i,j), AOA)
+   call GetReynoldsNumber(p%BEM_Mod, 0.0_ReKi, 0.0_ReKi, u%Vx(i,j), u%Vy(i,j), u%Vz(i,j), &
+                          p%chord(i,j), p%kinVisc, u%theta(i,j), phi, u%cantAngle(i,j), u%toeAngle(i,j), Re)
+   call AFI_ComputeAirfoilCoefs(AOA, Re, u%UserProp(i,j), AFInfo, AFI_interp, ErrStat2, ErrMsg2)
+   call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+   if (ErrStat >= AbortErrLev) return
+
+   ! Compute normal force coefficient Cx (same as cn in 3D mode)
+   if (p%BEM_Mod == BEMMod_2D) then
+      call Transform_ClCd_to_CxCy(phi, p%useAIDrag, p%useTIDrag, AFI_interp%Cl, AFI_interp%Cd, Cx, Cy)
+   else
+      call Transform_ClCdCm_to_CxCyCzCmxCmyCmz(phi, u%theta(i,j), u%cantAngle(i,j), u%toeAngle(i,j), &
+           p%useAIDrag, p%useTIDrag, AOA, AFI_interp%Cl, AFI_interp%Cd, AFI_interp%Cm, Cx, Cy, Cz, dumX, dumY, dumZ)
+   endif
+
+   ! Compute tip/hub loss factor
+   F = getHubTipLossCorrection(p%BEM_Mod, p%useHubLoss, p%useTipLoss, p%hubLossConst(i,j), &
+                               p%tipLossConst(i,j), phi, u%cantAngle(i,j))
+   F = max(F, 0.0001_ReKi)
+
+   ! MITRotor-compatible CT formula: C_x = σ * W² * C_n
+   ! where W² uses INDUCED velocities to match Howland's formulation
+   sigma_p = real(p%numBlades, ReKi) * p%chord(i,j) / (TwoPi * u%rlocal(i,j))
+   VxCorrected = u%Vx(i,j) * cos(u%cantAngle(i,j)) + u%xVelCorr(i,j)
+
+   ! Induced velocities (matching MITRotor: Vax = U*(1-a), Vtan = Vy*(1+a'))
+   VxInd = VxCorrected * (1.0_ReKi - a_rotor)
+   VyInd = u%Vy(i,j) * (1.0_ReKi + ap_local)
+
+   ! W² = induced velocity magnitude squared
+   W_sq = VxInd**2 + VyInd**2
+
+   if (U_ref_sq > 1.0e-10_ReKi) then
+      ! CT = σ * C_n * (W/U_ref)² * drdz / F
+      ! This matches MITRotor's C_x = σ * W² * C_n (with U_ref=1 in their case)
+      CT_local = sigma_p * Cx * W_sq / U_ref_sq * u%drdz(i,j)
+      CT_local = CT_local / F    ! Tip-loss correction
+      CT_local = max(0.0_ReKi, min(CT_local, 1.69_ReKi))  ! Clamp
+   endif
+
+   ! Also return tangential coefficient for computing tangential induction later
+   Cy_local = Cy
+
+end subroutine BEMTU_ComputeLocalCT
 !-----------------------------------------------------------------------------------------
 subroutine ApplySkewedWakeCorrection(BEM_Mod, SkewRedistrMod, yawCorrFactor, F, azimuth, azimuthOffset, chi0, tipRatio, a, chi, FirstWarn )
    
@@ -1366,6 +1455,69 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
    endif
 
 end subroutine axialInductionFromUnifiedMomentum
+
+!-----------------------------------------------------------------------------------------
+!> Compute axial induction from UMM using rotor-averaged CT
+!! This matches the MITRotor reference approach where CT is averaged
+!! across the rotor before calling the momentum model.
+subroutine axialInductionFromUnifiedMomentum_RotorAvg(chi0, CT_rotor_avg, F_avg, axInd)
+   use UMM_FixedPointIteration, only: getUMMInitialGuess, computeUMMResiduals6, &
+                                      UMM_MAX_ITER, UMM_TOLERANCE
+   real(R8Ki), intent(in)  :: chi0           ! Disk-averaged yaw angle [rad]
+   real(ReKi), intent(in)  :: CT_rotor_avg   ! Rotor-averaged thrust coefficient
+   real(ReKi), intent(in)  :: F_avg          ! Average tip-loss factor
+   real(ReKi), intent(out) :: axInd          ! Rotor-averaged axial induction
+
+   real(R8Ki) :: CT_used
+   real(R8Ki) :: state(6), residuals(6)
+   real(R8Ki) :: max_resid, relax_factor
+   logical    :: converged
+   integer    :: iter
+
+   ! Clamp CT to valid range
+   CT_used = real(max(0.0_ReKi, min(CT_rotor_avg, 1.69_ReKi)), R8Ki)
+
+   ! Get initial guess (k=0 since we're using CT directly, F_avg for tip loss)
+   call getUMMInitialGuess(CT_used, 0.0_R8Ki, real(F_avg, R8Ki), chi0, state)
+
+   ! Fixed-point iteration loop (same approach as axialInductionFromUnifiedMomentum)
+   converged = .false.
+   do iter = 1, UMM_MAX_ITER
+
+      ! Compute residuals for all 6 equations
+      call computeUMMResiduals6(state, CT_used, 0.0_R8Ki, real(F_avg, R8Ki), chi0, residuals)
+
+      ! Check convergence
+      max_resid = maxval(abs(residuals))
+      if (max_resid < UMM_TOLERANCE) then
+         converged = .true.
+         exit
+      endif
+
+      ! Update state with adaptive relaxation
+      if (iter < 100) then
+         relax_factor = 0.3_R8Ki
+      elseif (max_resid > 0.1_R8Ki) then
+         relax_factor = 0.4_R8Ki
+      else
+         relax_factor = 0.5_R8Ki
+      endif
+      state = state + (1.0_R8Ki - relax_factor) * residuals
+
+      ! Apply bounds to prevent divergence
+      state(1) = max(-1.5_R8Ki, min(state(1), 1.5_R8Ki))   ! an
+      state(2) = max(-3.0_R8Ki, min(state(2), 2.5_R8Ki))   ! u4
+      state(3) = max(-2.0_R8Ki, min(state(3), 2.0_R8Ki))   ! v4
+      state(4) = max(0.01_R8Ki, min(state(4), 100.0_R8Ki)) ! x0
+      state(5) = max(-2.0_R8Ki, min(state(5), 0.5_R8Ki))   ! dp
+      state(6) = max(-10.0_R8Ki, min(state(6), 20.0_R8Ki)) ! Ctprime
+
+   end do
+
+   ! Extract axial induction with bounds
+   axInd = real(max(0.0_R8Ki, min(state(1), 1.0_R8Ki)), ReKi)
+
+end subroutine axialInductionFromUnifiedMomentum_RotorAvg
 
 !> Compute the coefficients of a second order polynomial that extends the Momenutm relationship CT(a) 
 !! above a value a>ac. The continuation is done such that the slope and value at a=a_c match 
