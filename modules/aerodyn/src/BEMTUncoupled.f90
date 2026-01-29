@@ -594,7 +594,7 @@ subroutine BEMTU_ComputeLocalCT(p, u, i, j, phi, a_rotor, ap_local, U_ref_sq, AF
    F = max(F, 0.0001_ReKi)
 
    ! MITRotor-compatible CT formula: C_x = σ * W² * C_n
-   ! where W² uses INDUCED velocities to match Howland's formulation
+   ! where W² uses INDUCED velocities (matching the MITRotor reference implementation)
    sigma_p = real(p%numBlades, ReKi) * p%chord(i,j) / (TwoPi * u%rlocal(i,j))
    VxCorrected = u%Vx(i,j) * cos(u%cantAngle(i,j)) + u%xVelCorr(i,j)
 
@@ -982,7 +982,7 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
       ! where VxCorrected = Vx*cos(cantAngle) + xVelCorr (accounts for coning and skew)
       ! UMM_PrevTanInduction carries the tangential induction from the previous Brent iteration for velocity triangle consistency
       call axialInductionFromUnifiedMomentum(effectiveYaw, phi, k, F, a, H, Vx, Vy, sigma_p, cn, drdz, cantAngle, xVelCorr, UMM_PrevTanInduction)
-      a = sign(a,k) ! BCH (TODO): ADD WAKE PRESSURE OUTPUT
+      a = sign(a,k)
    endif
 
 
@@ -1210,7 +1210,7 @@ end subroutine axialInductionFromGlauertMomentum
 
 !> Solve for axial induction `a` using the Unified Momentum Model (UMM)
 !! Reference paper: Liew et al. 2024 - https://www.nature.com/articles/s41467-024-50756-5
-!! Referebce Python implementation: https://github.com/Howland-Lab/Unified-Momentum-Model/blob/main/UnifiedMomentumModel/Momentum.py (ThrustBasedUnified)
+!! Reference Python implementation: https://github.com/Howland-Lab/Unified-Momentum-Model/blob/main/UnifiedMomentumModel/Momentum.py (ThrustBasedUnified)
 !!
 !! Call UMM_FixedPointIteration.f90 to solve system of 6 nonlinear UMM equations using fixed-point iteration:
 !!   Eq 1: Rotor-normal induction (an)

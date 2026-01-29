@@ -29,8 +29,8 @@ module UMM_FixedPointIteration
    real(R8Ki),     public, parameter :: UMM_RELAXATION = 0.4_R8Ki    ! Relaxation factor (ThrustBasedUnified: [0.4, 0.6])
 
    ! NOTE: OpenFAST has existing parameters that could be reused, but the appropriate tol and max_iter may vary:
-   !   p%aTol             - tolerance for induction solve (typically 5e-5 to 5e-10)
-   !   p%maxIndIterations - maximum iterations (from input file)
+   !   p%aTol             - tolerance for outer Brent's method iteration solve for induction (from input file, default 5e-5)
+   !   p%maxIndIterations - maximum iterations for outer Brent's method solve for induction (from input file, default 300)
    ! Hardcoding UMM iteration settings for now (TODO)
 
    !-------------------------------------------------------------------------------------------------
@@ -275,7 +275,7 @@ contains
       an_init = 0.5_R8Ki * CT_used
       an_init = max(0.0_R8Ki, min(an_init, 0.9_R8Ki))  ! Bound to reasonable range
 
-      ! Initial Ctprime estimate - use simple sign(CT) to match Howland Lab reference
+      ! Initial Ctprime estimate - use simple sign(CT) to match MITRotor reference implementation
       ! Previous approach: Ctprime_init = CT_used / ((1-an_init)^2 * cos^2(yaw))
       ! This caused extreme values at high yaw angles, pushing iteration into ill-conditioned regions
       Ctprime_init = sign(1.0_R8Ki, CT_used)
@@ -284,7 +284,7 @@ contains
       x0_state(1) = an_init                  ! Axial induction
       x0_state(2) = 1.0_R8Ki - CT_used       ! Streamwise outlet velocity
       x0_state(3) = 0.0_R8Ki                 ! Lateral outlet velocity (zero initially)
-      x0_state(4) = 100.0_R8Ki               ! Near-wake length (Howland Lab uses 100, was 50)
+      x0_state(4) = 100.0_R8Ki               ! Near-wake length (matches MITRotor default)
       x0_state(5) = 0.0_R8Ki                 ! Pressure drop (zero initially)
       x0_state(6) = Ctprime_init             ! Initial Ctprime estimate
 
