@@ -1067,7 +1067,7 @@ subroutine UpdatePhi( u, p, phi, AFInfo, m, ValidPhi, errStat, errMsg )
    ErrMsg = ""
 
    !...............................................................................................................................
-   ! UMM: Use rotor-averaged induction iteration (MITRotor approach)
+   ! Use rotor-averaged induction iteration for UMM as intiial implementation
    ! This bypasses per-element Brent iteration and instead iterates on rotor-averaged axial induction
    !...............................................................................................................................
    if (p%useInduction .and. p%MomentumCorr == MomCorr_UMM) then
