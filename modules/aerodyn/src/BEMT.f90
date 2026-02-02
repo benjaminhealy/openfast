@@ -1206,7 +1206,7 @@ subroutine UpdatePhi_RotorAveragedUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, E
 
       !-----------------------------------------------------------------
       ! Step 2: Compute rotor-averaged CT from phi using freestream velocities
-      ! CT = σ * Cn * Vrel_free^2 / Vx_free^2 (freestream velocity formulation)
+      ! CT = sigma * Cn * Vrel_free^2 / Vx_free^2 (freestream velocity formulation)
       ! Simple averaging with integration weights (no area weighting needed
       ! as IntegrateWeight already accounts for radial distribution)
       !-----------------------------------------------------------------
