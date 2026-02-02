@@ -1109,7 +1109,7 @@ subroutine UpdatePhi( u, p, phi, AFInfo, m, ValidPhi, errStat, errMsg )
 
 end subroutine UpdatePhi
 !..................................................................................................................................
-!> Iterate on rotor-averaged induction for UMM (MITRotor approach)
+!> Iterate on rotor-averaged induction for UMM (first implementation)
 !! Instead of per-element Brent iteration on phi, we iterate on rotor-averaged
 !! axial induction and call UMM once per iteration with rotor-averaged CT.
 subroutine UpdatePhi_RotorAveragedUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, ErrMsg)
@@ -1160,20 +1160,20 @@ subroutine UpdatePhi_RotorAveragedUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, E
    debug_call_count = debug_call_count + 1
 
    ! Compute U_ref_sq: freestream reference velocity squared for CT normalization
-   ! This matches MITRotor's U=1 normalization by using disk-averaged Vx²
+   ! This matches MITRotor's U=1 normalization by using disk-averaged Vx^2
    ! At yaw, Vx is reduced by cos(yaw), so we correct for that using chi0
    U_ref_sq = 0.0_ReKi
    weight_sum = 0.0_ReKi
    do j = 1, p%numBlades
       do i = 1, p%numBladeNodes
-         ! Use Vx² (axial component) as reference - this gives U_freestream² * cos²(yaw)
+         ! Use Vx^2 (axial component) as reference, which gives U_freestream^2 * cos^2(yaw)
          U_ref_sq = U_ref_sq + u%Vx(i,j)**2 * p%IntegrateWeight(i,j)
          weight_sum = weight_sum + p%IntegrateWeight(i,j)
       end do
    end do
    if (weight_sum > 0.0_ReKi) then
-      U_ref_sq = U_ref_sq / weight_sum  ! Disk-averaged Vx²
-      ! Correct for yaw: U_freestream² = Vx² / cos²(chi0)
+      U_ref_sq = U_ref_sq / weight_sum  ! Disk-averaged Vx^2
+      ! Correct for yaw: U_freestream^2 = Vx^2 / cos^2(chi0)
       ! chi0 is the skew angle, approximately equal to yaw for typical cases
       if (abs(cos(u%CHI0)) > 0.1_ReKi) then
          U_ref_sq = U_ref_sq / (cos(u%CHI0)**2)
@@ -1206,7 +1206,7 @@ subroutine UpdatePhi_RotorAveragedUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, E
 
       !-----------------------------------------------------------------
       ! Step 2: Compute rotor-averaged CT from phi using freestream velocities
-      ! CT = σ * Cn * Vrel_free² / Vx_free² (freestream velocity formulation)
+      ! CT = σ * Cn * Vrel_free^2 / Vx_free^2 (freestream velocity formulation)
       ! Simple averaging with integration weights (no area weighting needed
       ! as IntegrateWeight already accounts for radial distribution)
       !-----------------------------------------------------------------

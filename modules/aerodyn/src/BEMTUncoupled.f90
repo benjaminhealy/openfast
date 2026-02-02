@@ -534,11 +534,11 @@ end function BEMTU_InductionWithResidual
 !-----------------------------------------------------------------------------------------
 !> Compute local thrust coefficient CT and tip-loss factor F
 !! This is used for rotor averaging before calling UMM
-!! CT formula matches MITRotor exactly: C_x = σ * W² * C_n
-!! where W is the INDUCED velocity magnitude (normalized by freestream)
-!! - Uses INDUCED velocities: Vax = Vx*(1-a), Vtan = Vy*(1+a')
-!! - NO division by Vx² (avoids yaw inflation problem)
-!! - Normalization is by freestream U² which is passed in
+!! CT formula mirroring MITRotor git repo: C_x = sigma * W^2 * C_n
+!! where W is the induced velocity magnitude (normalized by freestream)
+!! - Uses induced velocities: Vax = Vx*(1-a), Vtan = Vy*(1+a')
+!! - NO division by Vx^2 (avoids yaw inflation problem)
+!! - Normalization is by freestream U^2 which is passed in
 subroutine BEMTU_ComputeLocalCT(p, u, i, j, phi, a_rotor, ap_local, U_ref_sq, AFInfo, CT_local, Cy_local, F, ErrStat, ErrMsg)
    type(BEMT_ParameterType), intent(in)  :: p
    type(BEMT_InputType),     intent(in)  :: u
@@ -593,8 +593,8 @@ subroutine BEMTU_ComputeLocalCT(p, u, i, j, phi, a_rotor, ap_local, U_ref_sq, AF
                                p%tipLossConst(i,j), phi, u%cantAngle(i,j))
    F = max(F, 0.0001_ReKi)
 
-   ! MITRotor-compatible CT formula: C_x = σ * W² * C_n
-   ! where W² uses INDUCED velocities (matching the MITRotor reference implementation)
+   ! MITRotor CT formula: C_x = sigma * W^2 * C_n
+   ! where W^2 uses induced velocities (matching the MITRotor reference implementation)
    sigma_p = real(p%numBlades, ReKi) * p%chord(i,j) / (TwoPi * u%rlocal(i,j))
    VxCorrected = u%Vx(i,j) * cos(u%cantAngle(i,j)) + u%xVelCorr(i,j)
 
@@ -602,12 +602,12 @@ subroutine BEMTU_ComputeLocalCT(p, u, i, j, phi, a_rotor, ap_local, U_ref_sq, AF
    VxInd = VxCorrected * (1.0_ReKi - a_rotor)
    VyInd = u%Vy(i,j) * (1.0_ReKi + ap_local)
 
-   ! W² = induced velocity magnitude squared
+   ! W^2 = induced velocity magnitude squared
    W_sq = VxInd**2 + VyInd**2
 
    if (U_ref_sq > 1.0e-10_ReKi) then
-      ! CT = σ * C_n * (W/U_ref)² * drdz / F
-      ! This matches MITRotor's C_x = σ * W² * C_n (with U_ref=1 in their case)
+      ! CT = sigma * C_n * (W/U_ref)^2 * drdz / F
+      ! This matches MITRotor's C_x = σ * W^2 * C_n (with U_ref=1 in their case)
       CT_local = sigma_p * Cx * W_sq / U_ref_sq * u%drdz(i,j)
       CT_local = CT_local / F    ! Tip-loss correction
       CT_local = max(0.0_ReKi, min(CT_local, 1.69_ReKi))  ! Clamp
