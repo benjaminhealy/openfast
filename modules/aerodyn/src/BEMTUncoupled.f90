@@ -79,7 +79,7 @@ module BEMTUnCoupled
    public :: UMM_IncrementBrentEvalCount
    public :: UMM_LogBrentConvergence
    public :: BEMTU_ComputeLocalCT
-   public :: axialInductionFromUnifiedMomentum_RotorAvg
+   public :: UMM_SolveForAxialInduction
    public :: getTangentialInduction
 contains
    
@@ -1457,16 +1457,17 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
 end subroutine axialInductionFromUnifiedMomentum
 
 !-----------------------------------------------------------------------------------------
-!> Compute axial induction from UMM using rotor-averaged CT
-!! This matches the MITRotor reference approach where CT is averaged
-!! across the rotor before calling the momentum model.
-subroutine axialInductionFromUnifiedMomentum_RotorAvg(chi0, CT_rotor_avg, F_avg, axInd)
+!> Solve UMM 6-equation system to get axial induction from CT
+!! This is the core UMM solver - it takes thrust coefficient and tip-loss factor
+!! as inputs and returns the axial induction. Works for both rotor-averaged
+!! and per-element CT values.
+subroutine UMM_SolveForAxialInduction(chi0, CT, F, axInd)
    use UMM_FixedPointIteration, only: getUMMInitialGuess, computeUMMResiduals6, &
                                       UMM_MAX_ITER, UMM_TOLERANCE
-   real(R8Ki), intent(in)  :: chi0           ! Disk-averaged yaw angle [rad]
-   real(ReKi), intent(in)  :: CT_rotor_avg   ! Rotor-averaged thrust coefficient
-   real(ReKi), intent(in)  :: F_avg          ! Average tip-loss factor
-   real(ReKi), intent(out) :: axInd          ! Rotor-averaged axial induction
+   real(R8Ki), intent(in)  :: chi0    ! Yaw/skew angle [rad]
+   real(ReKi), intent(in)  :: CT      ! Thrust coefficient (rotor-averaged or per-element)
+   real(ReKi), intent(in)  :: F       ! Tip-loss factor
+   real(ReKi), intent(out) :: axInd   ! Axial induction output
 
    real(R8Ki) :: CT_used
    real(R8Ki) :: state(6), residuals(6)
@@ -1475,17 +1476,17 @@ subroutine axialInductionFromUnifiedMomentum_RotorAvg(chi0, CT_rotor_avg, F_avg,
    integer    :: iter
 
    ! Clamp CT to valid range
-   CT_used = real(max(0.0_ReKi, min(CT_rotor_avg, 1.69_ReKi)), R8Ki)
+   CT_used = real(max(0.0_ReKi, min(CT, 1.69_ReKi)), R8Ki)
 
-   ! Get initial guess (k=0 since we're using CT directly, F_avg for tip loss)
-   call getUMMInitialGuess(CT_used, 0.0_R8Ki, real(F_avg, R8Ki), chi0, state)
+   ! Get initial guess (k=0 since we're using CT directly)
+   call getUMMInitialGuess(CT_used, 0.0_R8Ki, real(F, R8Ki), chi0, state)
 
-   ! Fixed-point iteration loop (same approach as axialInductionFromUnifiedMomentum)
+   ! Fixed-point iteration loop
    converged = .false.
    do iter = 1, UMM_MAX_ITER
 
       ! Compute residuals for all 6 equations
-      call computeUMMResiduals6(state, CT_used, 0.0_R8Ki, real(F_avg, R8Ki), chi0, residuals)
+      call computeUMMResiduals6(state, CT_used, 0.0_R8Ki, real(F, R8Ki), chi0, residuals)
 
       ! Check convergence
       max_resid = maxval(abs(residuals))
@@ -1517,7 +1518,7 @@ subroutine axialInductionFromUnifiedMomentum_RotorAvg(chi0, CT_rotor_avg, F_avg,
    ! Extract axial induction with bounds
    axInd = real(max(0.0_R8Ki, min(state(1), 1.0_R8Ki)), ReKi)
 
-end subroutine axialInductionFromUnifiedMomentum_RotorAvg
+end subroutine UMM_SolveForAxialInduction
 
 !> Compute the coefficients of a second order polynomial that extends the Momenutm relationship CT(a) 
 !! above a value a>ac. The continuation is done such that the slope and value at a=a_c match 
