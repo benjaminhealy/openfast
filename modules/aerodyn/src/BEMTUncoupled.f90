@@ -29,7 +29,6 @@ module BEMTUnCoupled
    use PolynomialRoots
    use UMM_Pressure
    use UMM_FixedPointIteration
-   ! use UMM_NewtonRaphson  ! Disabled - Newton-Raphson had convergence issues
 
 
    implicit none
@@ -42,15 +41,8 @@ module BEMTUnCoupled
    
    real(R8Ki),             parameter  :: MaxTanChi0   = 100.0_R8Ki         ! maximum absolute value allowed for tan(chi0), an arbitary large number
 
-   ! UMM 1D momentum fallback counters - tracks when simplified a=k/(k+1) formula is used
-   integer(IntKi), save :: UMM_1DMomentumFallbackCount = 0       ! Total fallbacks across simulation
-   logical,        save :: UMM_1DMomentumFallbackWarned = .false.
-
-   ! Per-Brent-solve tracking (reset at start of each Brent solve)
-   integer(IntKi), save :: UMM_BrentSolveFallbackCount = 0       ! Fallbacks in current Brent solve
-   integer(IntKi), save :: UMM_BrentSolveEvalCount = 0           ! Total evaluations in current Brent solve
-   integer(IntKi), save :: UMM_LastFallbackEvalNum = 0           ! Evaluation number of last fallback
-   real(R8Ki),     save :: UMM_PrevTanInduction = 0.0_R8Ki       ! Tangential induction from previous Brent iteration (for velocity triangle)
+   ! Tangential induction from previous Brent iteration, used in velocity triangle for CT calculation
+   real(R8Ki),     save :: UMM_PrevTanInduction = 0.0_R8Ki
 
    !1e-6 works for double precision, but not single precision
    real(ReKi),     public, parameter  :: BEMT_epsilon2 = 10.0_ReKi*sqrt(epsilon(1.0_ReKi)) !this is the tolerance in radians for values around singularities in phi (i.e., phi=0 and phi=pi/2); must be large enough so that EqualRealNos(BEMT_epsilon2, 0.0_ReKi) is false
@@ -73,11 +65,6 @@ module BEMTUnCoupled
    public :: VelocityIsZero
 
    public :: BEMTU_Test_ACT_Relationship
-   public :: UMM_Get1DMomentumFallbackStats
-   public :: UMM_Reset1DMomentumFallbackStats
-   public :: UMM_ResetBrentSolveStats
-   public :: UMM_IncrementBrentEvalCount
-   public :: UMM_LogBrentConvergence
    public :: BEMTU_ComputeLocalCT
    public :: UMM_SolveForAxialInduction
    public :: getTangentialInduction
@@ -91,69 +78,6 @@ contains
       VelocityIsZero = abs(v) < 0.001_ReKi ! tolerance in m/s for what we consider zero velocity for BEM computations
    
    end function VelocityIsZero
-!..................................................................................................................................
-!> Get statistics on how many times the 1D momentum fallback (a=k/(k+1)) was used instead of full UMM iteration
-!! This occurs when |k| > 100 due to extreme values from near-zero inflow angles
-subroutine UMM_Get1DMomentumFallbackStats(count)
-   integer(IntKi), intent(out) :: count   !< Number of times 1D momentum fallback was used
-   count = UMM_1DMomentumFallbackCount
-end subroutine UMM_Get1DMomentumFallbackStats
-!..................................................................................................................................
-!> Reset the 1D momentum fallback counter (call at start of simulation or when desired)
-subroutine UMM_Reset1DMomentumFallbackStats()
-   UMM_1DMomentumFallbackCount = 0
-   UMM_1DMomentumFallbackWarned = .false.
-end subroutine UMM_Reset1DMomentumFallbackStats
-!..................................................................................................................................
-!> Reset per-Brent-solve counters (call at start of each sub_brent call)
-subroutine UMM_ResetBrentSolveStats()
-   UMM_BrentSolveFallbackCount = 0
-   UMM_BrentSolveEvalCount = 0
-   UMM_LastFallbackEvalNum = 0
-   UMM_PrevTanInduction = 0.0_R8Ki
-end subroutine UMM_ResetBrentSolveStats
-!..................................................................................................................................
-!> Increment evaluation counter (call each time BEMTU_InductionWithResidual is evaluated in Brent)
-subroutine UMM_IncrementBrentEvalCount()
-   UMM_BrentSolveEvalCount = UMM_BrentSolveEvalCount + 1
-end subroutine UMM_IncrementBrentEvalCount
-!..................................................................................................................................
-!> Log Brent convergence stats if 1D fallback was used (call when Brent converges)
-subroutine UMM_LogBrentConvergence(iBladeNode, jBlade, phi, converged)
-   integer(IntKi), intent(in) :: iBladeNode, jBlade
-   real(ReKi),     intent(in) :: phi
-   logical,        intent(in) :: converged
-
-   integer(IntKi) :: itersSinceLastFallback
-   integer(IntKi) :: UnLog, ErrStat
-   logical :: FileExists
-   character(256) :: LogFileName
-
-   ! Only log if fallbacks occurred and solution converged
-   if (UMM_BrentSolveFallbackCount > 0 .and. converged) then
-      itersSinceLastFallback = UMM_BrentSolveEvalCount - UMM_LastFallbackEvalNum
-
-      LogFileName = 'UMM_1D_fallback_convergence.log'
-      inquire(file=trim(LogFileName), exist=FileExists)
-
-      UnLog = 99
-      if (FileExists) then
-         open(unit=UnLog, file=trim(LogFileName), status='old', position='append', iostat=ErrStat)
-      else
-         open(unit=UnLog, file=trim(LogFileName), status='new', iostat=ErrStat)
-         if (ErrStat == 0) then
-            write(UnLog, '(A)') 'iNode,jBlade,phi,fallbackCount,totalEvals,itersSinceLastFallback'
-         endif
-      endif
-
-      if (ErrStat == 0) then
-         write(UnLog, '(I4,A,I2,A,E12.5,A,I4,A,I4,A,I4)') &
-            iBladeNode, ',', jBlade, ',', phi, ',', &
-            UMM_BrentSolveFallbackCount, ',', UMM_BrentSolveEvalCount, ',', itersSinceLastFallback
-         close(UnLog)
-      endif
-   endif
-end subroutine UMM_LogBrentConvergence
 !..................................................................................................................................
 
    subroutine GetReynoldsNumber(BEM_Mod, axInduction, tanInduction, Vx, Vy, Vz, chord, nu, theta, phi, cantAngle, toeAngle , Re )
@@ -532,13 +456,10 @@ real(ReKi) function BEMTU_InductionWithResidual(p, u, i, j, phi, AFInfo, IsValid
    
 end function BEMTU_InductionWithResidual
 !-----------------------------------------------------------------------------------------
-!> Compute local thrust coefficient CT and tip-loss factor F
-!! This is used for rotor averaging before calling UMM
-!! CT formula mirroring MITRotor git repo: C_x = sigma * W^2 * C_n
-!! where W is the induced velocity magnitude (normalized by freestream)
-!! - Uses induced velocities: Vax = Vx*(1-a), Vtan = Vy*(1+a')
-!! - NO division by Vx^2 (avoids yaw inflation problem)
-!! - Normalization is by freestream U^2 which is passed in
+!> Compute local thrust coefficient CT and tip-loss factor F for UMM
+!! CT = sigma * Cn * W^2 / U_ref^2 * drdz / F
+!! Uses induced velocities for W^2, normalized by freestream U_ref^2
+!! Ref: MITRotor git repo (Howland-Lab/Unified-Momentum-Model)
 subroutine BEMTU_ComputeLocalCT(p, u, i, j, phi, a_rotor, ap_local, U_ref_sq, AFInfo, CT_local, Cy_local, F, ErrStat, ErrMsg)
    type(BEMT_ParameterType), intent(in)  :: p
    type(BEMT_InputType),     intent(in)  :: u
@@ -593,12 +514,11 @@ subroutine BEMTU_ComputeLocalCT(p, u, i, j, phi, a_rotor, ap_local, U_ref_sq, AF
                                p%tipLossConst(i,j), phi, u%cantAngle(i,j))
    F = max(F, 0.0001_ReKi)
 
-   ! MITRotor CT formula: C_x = sigma * W^2 * C_n
-   ! where W^2 uses induced velocities (matching the MITRotor reference implementation)
+   ! CT = sigma * Cn * W^2 / U_ref^2 * drdz / F
    sigma_p = real(p%numBlades, ReKi) * p%chord(i,j) / (TwoPi * u%rlocal(i,j))
    VxCorrected = u%Vx(i,j) * cos(u%cantAngle(i,j)) + u%xVelCorr(i,j)
 
-   ! Induced velocities (matching MITRotor: Vax = U*(1-a), Vtan = Vy*(1+a'))
+   ! Induced velocities: Vax = Vx*(1-a), Vtan = Vy*(1+a')
    VxInd = VxCorrected * (1.0_ReKi - a_rotor)
    VyInd = u%Vy(i,j) * (1.0_ReKi + ap_local)
 
@@ -606,8 +526,7 @@ subroutine BEMTU_ComputeLocalCT(p, u, i, j, phi, a_rotor, ap_local, U_ref_sq, AF
    W_sq = VxInd**2 + VyInd**2
 
    if (U_ref_sq > 1.0e-10_ReKi) then
-      ! CT = sigma * C_n * (W/U_ref)^2 * drdz / F
-      ! This matches MITRotor's C_x = σ * W^2 * C_n (with U_ref=1 in their case)
+      ! CT = sigma * Cn * (W/U_ref)^2 * drdz / F
       CT_local = sigma_p * Cx * W_sq / U_ref_sq * u%drdz(i,j)
       CT_local = CT_local / F    ! Tip-loss correction
       CT_local = max(0.0_ReKi, min(CT_local, 1.69_ReKi))  ! Clamp
@@ -976,11 +895,8 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
        call axialInductionFromGlauertMomentum(effectiveYaw, phi, k, F, a, H) 
        a = sign(a,k)
    elseif (MomentumCorr == MomCorr_UMM) then
-      ! --- Using the Unified Momentum Model (Liew et al 2024) to compute axial induction under skewed inflow where "a" is "an" (Wn = -an Un)
-      ! Pass velocity parameters (Vx, Vy, sigma_p, cn, drdz, cantAngle, xVelCorr) to enable velocity-based CT calculation.
-      ! This avoids the 1/sin2(phi) singularity by computing CT = sigma_p·Cn·Vrel^2/VxCorrected^2
-      ! where VxCorrected = Vx*cos(cantAngle) + xVelCorr (accounts for coning and skew)
-      ! UMM_PrevTanInduction carries the tangential induction from the previous Brent iteration for velocity triangle consistency
+      ! --- Using the Unified Momentum Model (Liew et al. 2024) for axial induction under skewed inflow
+      ! Uses velocity-based CT to avoid the 1/sin^2(phi) singularity in the k-based formulation
       call axialInductionFromUnifiedMomentum(effectiveYaw, phi, k, F, a, H, Vx, Vy, sigma_p, cn, drdz, cantAngle, xVelCorr, UMM_PrevTanInduction)
       a = sign(a,k)
    endif
@@ -1208,28 +1124,16 @@ subroutine axialInductionFromGlauertMomentum(chi0, phi, k, F, axInd, H)
    endif  
 end subroutine axialInductionFromGlauertMomentum
 
-!> Solve for axial induction `a` using the Unified Momentum Model (UMM)
-!! Reference paper: Liew et al. 2024 - https://www.nature.com/articles/s41467-024-50756-5
-!! Reference Python implementation: https://github.com/Howland-Lab/Unified-Momentum-Model/blob/main/UnifiedMomentumModel/Momentum.py (ThrustBasedUnified)
+!> Solve for axial induction using the Unified Momentum Model (UMM)
+!! Ref: Liew et al. 2024 (doi:10.1038/s41467-024-50756-5)
+!! Ref: MITRotor git repo (Howland-Lab/Unified-Momentum-Model)
 !!
-!! Call UMM_FixedPointIteration.f90 to solve system of 6 nonlinear UMM equations using fixed-point iteration:
-!!   Eq 1: Rotor-normal induction (an)
-!!   Eq 2: Streamwise outlet velocity (u4)
-!!   Eq 3: Lateral outlet velocity (v4)
-!!   Eq 4: Near-wake length (x0)
-!!   Eq 5: Outlet pressure drop (dp)
-!!   Eq 6: CT-Ctprime relationship that bridges BEM k to UMM Ctprime
+!! Solves system of 6 nonlinear UMM equations via fixed-point iteration
+!! (see UMM_FixedPointIteration.f90 and computeUMMResiduals6).
 !!
-!! Input: k = thrust parameter from current BEM solution in OpenFAST (CT = 4*F*k*(1-an)^2)
-!! Output: axInd = axial induction factor (an pulled from UMM solution)
-!!         H = 1.0 (tangential induction factor, not modified by UMM)
-!!
-!! NOTE: UMM is valid for all thrust regimes - do not need to check if k > kc and apply any high-thrust corrections
-!!
-!! CT is computed directly from blade element velocity formulation
-!!   VxCorrected = Vx*cos(cantAngle) + xVelCorr  (accounts for coning and skew)
+!! CT is computed from the velocity-based formulation:
 !!   CT = sigma_p * Cn * Vrel^2 / VxCorrected^2 * drdz
-!! This avoids the 1/sin^2(phi) singularity that occurs when computing k = sigma*Cn/(4F*sin^2(phi))
+!! This avoids the 1/sin^2(phi) singularity in the k-based formulation.
 subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, sigma_p, cn, drdz, cantAngle, xVelCorr, ap_prev)
    implicit none
    real(R8Ki), intent(in) :: chi0                     !< Skew/yaw angle [rad] (effective yaw)
@@ -1238,7 +1142,7 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
    real(ReKi), intent(in) :: phi                      !< BEMT airfoil inflow angle
    real(R8Ki), intent(out):: axInd                    !< Axial induction factor
    real(R8Ki), intent(out):: H                        !< scaling factor to gradually phase out tangential induction when axial induction is near 1.0
-   ! Required parameters for velocity-based CT calculation (to avoid 1 / sin2(phi) singularity)
+   ! Parameters for velocity-based CT calculation
    real(ReKi), intent(in), optional :: Vx             !< Axial velocity component
    real(ReKi), intent(in), optional :: Vy             !< Tangential velocity component
    real(R8Ki), intent(in), optional :: sigma_p        !< Local solidity (B*chord/(2*pi*r))
@@ -1258,18 +1162,11 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
 
    ! Local variables for CT calculation
    real(R8Ki) :: CT_direct                            !< CT computed directly from velocities
-   real(R8Ki) :: CT_old                               !< CT computed from k (old formulation, for comparison)
    real(R8Ki) :: Vrel_sq                              !< Relative velocity squared
    real(R8Ki) :: VxCorrected                          !< Corrected axial velocity (accounts for coning and skew)
    real(R8Ki) :: a_from_phi                           !< Axial induction consistent with assumed phi (from velocity triangle)
    real(R8Ki) :: ap_used                              !< Tangential induction used in velocity triangle
    logical    :: have_velocity_params                 !< Flag indicating velocity parameters available
-
-   ! Debug logging variables
-   integer(IntKi) :: UnLog                            !< Unit number for log file
-   integer(IntKi) :: ErrStat
-   logical :: FileExists
-   character(256) :: LogFileName
 
    !---------------------------------------------------------------------------
    ! Check if velocity parameters are available for direct CT calculation
@@ -1286,16 +1183,11 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
    endif
 
    !---------------------------------------------------------------------------
-   ! Compute CT directly from blade element velocity formulation
-   !   VxCorrected = Vx*cos(cantAngle) + xVelCorr  (accounts for coning and skew)
-   !   CT = sigma_p * Cn * Vrel^2 / VxCorrected^2 * drdz
-   !
-   ! This formulation avoids the 1/sin^2(phi) singularity noted when CT is calculated from k for small phi-values
+   ! Compute CT from velocity-based formulation (avoids 1/sin^2(phi) singularity)
    !---------------------------------------------------------------------------
    if (have_velocity_params .and. abs(Vx) > 1.0e-10_ReKi) then
 
-      ! Compute corrected axial velocity (same as in inductionFactors2)
-      ! VxCorrected accounts for blade coning (cantAngle) and skewed inflow (xVelCorr)
+      ! Corrected axial velocity accounting for coning and skew
       if (present(cantAngle) .and. present(xVelCorr)) then
          VxCorrected = real(Vx,R8Ki) * cos(real(cantAngle,R8Ki)) + real(xVelCorr,R8Ki)
       else
@@ -1308,16 +1200,8 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
       endif
 
       !------------------------------------------------------------------------
-      ! Compute a_from_phi: axial induction consistent with the assumed phi
-      ! From velocity triangle: tan(φ) = Vx(1-a) / [Vy(1+a')]
-      ! Solving for a: a = 1 - Vy(1+a')*tan(φ) / VxCorrected
-      !
-      ! This ensures CT is computed with an induction value consistent with
-      ! the phi that Brent's method is currently testing, rather than a fixed
-      ! estimate. At convergence, a_from_phi ≈ an (the UMM solution).
+      ! Compute a_from_phi from velocity triangle: a = 1 - Vy(1+a')*tan(phi) / VxCorrected
       !------------------------------------------------------------------------
-
-      ! Use tangential induction from previous Brent iteration if available
       if (present(ap_prev)) then
          ap_used = ap_prev
       else
@@ -1333,62 +1217,35 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
          a_from_phi = 0.1_R8Ki
       endif
 
-      ! Clamp a_from_phi to physical range for momentum region
-      ! Upper bound 0.95 avoids turbulent wake state where momentum theory breaks down
-      ! Lower bound -0.1 allows small numerical excursions near zero
+      ! Clamp to valid momentum range
       a_from_phi = max(-0.1_R8Ki, min(a_from_phi, 0.95_R8Ki))
 
       ! Compute Vrel^2 = VxCorrected^2*(1-a)^2 + Vy^2*(1+a')^2
       Vrel_sq = (VxCorrected * (1.0_R8Ki - a_from_phi))**2 + (real(Vy,R8Ki) * (1.0_R8Ki + ap_used))**2
 
-      ! Compute CT using velocity formulation: CT = sigma_p·Cn·Vrel^2/VxCorrected^2 · drdz
-      ! This is algebraically equivalent to CT = 4Fk(1-a)^2 but avoids the sin^2(phi) singularity
-      ! and includes the same coning/skew corrections as applied to k in inductionFactors2
+      ! CT = sigma_p * Cn * Vrel^2 / VxCorrected^2 * drdz
       CT_direct = sigma_p * real(cn,R8Ki) * Vrel_sq / (VxCorrected**2) * drdz
 
-      ! Divide BEM-computed Ct by F to account for tip loss before passing to UMM
-      ! This approach is consistent with the quartic polynomial for the Glauert BEMT coupling
-      ! Use F floor of 0.01 to match MITRotor's effective minimum (~0.009 from arccos clipping)
-      ! Note: OpenFAST's global F floor is 0.0001, but that causes CT/F to blow up near tip in UMM coupling
+      ! Divide by tip-loss factor (F floor of 0.01 for numerical stability near tip)
       CT_direct = CT_direct / max(real(F, R8Ki), 0.01_R8Ki)
 
-      ! Clamp CT to physical Betz limit region [0, ~1.7] with margin for high-thrust states, similar to MITRotor
+      ! Clamp CT to [0, 1.69]
       CT_direct = max(0.0_R8Ki, min(CT_direct, 1.69_R8Ki))
-
-      !------------------------------------------------------------------------
-      ! OLD (for comparison): CT computed from k (has sin^2(phi) singularity)
-      ! CT_old = 4*F*k*(1-a)^2 with a estimated from 1D momentum
-      ! Note: k already has kCorrectionFactor^2 applied in inductionFactors2
-      !------------------------------------------------------------------------
-      CT_old = 4.0_R8Ki * real(F,R8Ki) * k * (1.0_R8Ki - a_from_phi)**2
-      CT_old = max(-4.0_R8Ki, min(CT_old, 10.0_R8Ki))
 
    else
       ! Velocity parameters not available - fall back to 1D momentum
       axInd = k / (k + 1.0_R8Ki)
       H = 1.0_R8Ki
-      ! Track usage of 1D momentum fallback for monitoring (global)
-      UMM_1DMomentumFallbackCount = UMM_1DMomentumFallbackCount + 1
-      ! Track per-Brent-solve stats
-      UMM_BrentSolveFallbackCount = UMM_BrentSolveFallbackCount + 1
-      UMM_LastFallbackEvalNum = UMM_BrentSolveEvalCount
-      if (.not. UMM_1DMomentumFallbackWarned) then
-         call WrScr('UMM: Using 1D momentum fallback - velocity params not available. k='//trim(Num2LStr(k)))
-         UMM_1DMomentumFallbackWarned = .true.
-      endif
       return
    endif
 
    !---------------------------------------------------------------------------
-   ! Initialize state vector using ThrustBasedUnified approach
-   ! State = (an, u4, v4, x0, dp, Ctprime)
+   ! Initialize UMM state vector: (an, u4, v4, x0, dp, Ctprime)
    !---------------------------------------------------------------------------
    call getUMMInitialGuess(CT_direct, k, F, chi0, state)
 
    !---------------------------------------------------------------------------
-   ! Fixed-point iteration loop
-   ! Based on https://github.com/Howland-Lab/Unified-Momentum-Model/blob/main/UnifiedMomentumModel/Momentum.py
-   ! Settings: max 10000 iterations, tol=1e-5, adaptive relaxation [0.3-0.5]
+   ! Fixed-point iteration loop (adaptive relaxation)
    !---------------------------------------------------------------------------
    converged = .false.
    do iter = 1, UMM_MAX_ITER
@@ -1427,40 +1284,13 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
    ! Extract outputs
    !---------------------------------------------------------------------------
    axInd = state(1)  ! Axial induction (an)
-   H = 1.0_R8Ki      ! UMM does not modify tangential induction (leave as is)
-
-   !---------------------------------------------------------------------------
-   ! Debug logging for comparison and non-convergence
-   !---------------------------------------------------------------------------
-   if (.not. converged) then
-      ! Log warning about non-convergence with comparison of old vs new CT
-      LogFileName = 'UMM_subroutine_nonconverge.log'
-      inquire(file=trim(LogFileName), exist=FileExists)
-      if (FileExists) then
-         open(newunit=UnLog, file=trim(LogFileName), status='old', position='append', iostat=ErrStat)
-      else
-         open(newunit=UnLog, file=trim(LogFileName), status='new', iostat=ErrStat)
-         if (ErrStat == 0) then
-            write(UnLog, '(A)') '# UMM Non-Convergence Log (NEW CT-based formulation)'
-            write(UnLog, '(A)') '# iter, max_resid, k, CT_direct, CT_old, F, chi0, phi, an, u4, v4, x0, dp, Ctprime'
-         endif
-      endif
-      if (ErrStat == 0) then
-         write(UnLog, '(I6,A,ES12.4,A,ES12.4,A,ES12.4,A,ES12.4,A,ES12.4,A,ES12.4,A,ES12.4,A,6(ES12.4,A))') &
-            iter, ',', max_resid, ',', k, ',', CT_direct, ',', CT_old, ',', &
-            real(F,R8Ki), ',', chi0, ',', real(phi,R8Ki), ',', &
-            state(1), ',', state(2), ',', state(3), ',', state(4), ',', state(5), ',', state(6), ''
-         close(UnLog)
-      endif
-   endif
+   H = 1.0_R8Ki      ! UMM does not modify tangential induction scaling
 
 end subroutine axialInductionFromUnifiedMomentum
 
 !-----------------------------------------------------------------------------------------
-!> Solve UMM 6-equation system to get axial induction from CT
-!! This is the core UMM solver - it takes thrust coefficient and tip-loss factor
-!! as inputs and returns the axial induction. Works for both rotor-averaged
-!! and per-element CT values.
+!> Solve UMM 6-equation system for axial induction given CT and F
+!! Works for both rotor-averaged and per-element CT values.
 subroutine UMM_SolveForAxialInduction(chi0, CT, F, axInd)
    use UMM_FixedPointIteration, only: getUMMInitialGuess, computeUMMResiduals6, &
                                       UMM_MAX_ITER, UMM_TOLERANCE

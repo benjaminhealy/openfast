@@ -1146,22 +1146,14 @@ subroutine UpdatePhi_RotorAveragedUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, E
    real(ReKi), parameter :: TOL = 1.0e-6_ReKi
    real(ReKi), parameter :: RELAX = 0.5_ReKi  ! Relaxation factor for stability
 
-   ! Debug output variables
-   integer(IntKi), save :: debug_call_count = 0
-   logical, save :: debug_file_opened = .false.
-   integer(IntKi) :: debug_unit
-   real(ReKi) :: a_from_umm  ! Induction directly from UMM (before relaxation)
-
    ErrStat = ErrID_None
    ErrMsg = ""
 
-   ! Initialize with default (could use previous timestep value if stored)
+   ! Initialize axial induction
    a_rotor = 0.333_ReKi
-   debug_call_count = debug_call_count + 1
 
    ! Compute U_ref_sq: freestream reference velocity squared for CT normalization
-   ! This matches MITRotor's U=1 normalization by using disk-averaged Vx^2
-   ! At yaw, Vx is reduced by cos(yaw), so we correct for that using chi0
+   ! Uses disk-averaged Vx^2 with yaw correction via chi0
    U_ref_sq = 0.0_ReKi
    weight_sum = 0.0_ReKi
    do j = 1, p%numBlades
@@ -1174,7 +1166,6 @@ subroutine UpdatePhi_RotorAveragedUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, E
    if (weight_sum > 0.0_ReKi) then
       U_ref_sq = U_ref_sq / weight_sum  ! Disk-averaged Vx^2
       ! Correct for yaw: U_freestream^2 = Vx^2 / cos^2(chi0)
-      ! chi0 is the skew angle, approximately equal to yaw for typical cases
       if (abs(cos(u%CHI0)) > 0.1_ReKi) then
          U_ref_sq = U_ref_sq / (cos(u%CHI0)**2)
       endif
@@ -1205,10 +1196,7 @@ subroutine UpdatePhi_RotorAveragedUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, E
       end do
 
       !-----------------------------------------------------------------
-      ! Step 2: Compute rotor-averaged CT from phi using freestream velocities
-      ! CT = sigma * Cn * Vrel_free^2 / Vx_free^2 (freestream velocity formulation)
-      ! Simple averaging with integration weights (no area weighting needed
-      ! as IntegrateWeight already accounts for radial distribution)
+      ! Step 2: Compute rotor-averaged CT from phi
       !-----------------------------------------------------------------
       CT_rotor_avg = 0.0_ReKi
       F_sum = 0.0_ReKi
@@ -1232,27 +1220,12 @@ subroutine UpdatePhi_RotorAveragedUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, E
       F_avg = max(F_sum, 0.0001_ReKi)
 
       !-----------------------------------------------------------------
-      ! Step 3: Call UMM ONCE with rotor-averaged CT
+      ! Step 3: Call UMM with rotor-averaged CT
       !-----------------------------------------------------------------
       call UMM_SolveForAxialInduction(u%CHI0, CT_rotor_avg, F_avg, a_rotor)
-      a_from_umm = a_rotor  ! Save pre-relaxation value for debug
 
       ! Apply relaxation for stability
       a_rotor = RELAX * a_rotor + (1.0_ReKi - RELAX) * a_rotor_old
-
-      ! Debug output: trace first few calls and every 1000th call
-      if (debug_call_count <= 10 .or. mod(debug_call_count, 1000) == 0) then
-         if (iter <= 5 .or. abs(a_rotor - a_rotor_old) < TOL) then
-            debug_unit = 98
-            open(unit=debug_unit, file='UMM_rotor_avg_debug.log', status='unknown', position='append')
-            write(debug_unit, '(A,I8,A,I4,A,F8.4,A,F8.5,A,F8.5,A,F8.5,A,F8.5,A,E10.3)') &
-               'call=', debug_call_count, ' iter=', iter, &
-               ' yaw=', real(u%CHI0)*57.2958, &
-               ' CT=', CT_rotor_avg, ' F=', F_avg, &
-               ' a_umm=', a_from_umm, ' a_relax=', a_rotor, ' err=', abs(a_rotor - a_rotor_old)
-            close(debug_unit)
-         endif
-      endif
 
       !-----------------------------------------------------------------
       ! Step 4: Update local tangential induction (for next iteration's phi)
@@ -1329,7 +1302,7 @@ subroutine UpdatePhi_PerElementUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, ErrM
 
    integer(IntKi), parameter :: MAX_ITER = 100
    real(ReKi), parameter :: TOL = 1.0e-6_ReKi
-   real(ReKi), parameter :: RELAX = 0.5_ReKi    ! Relaxation factor for stability
+   real(ReKi), parameter :: RELAX = 0.5_ReKi    ! Relaxation factor
 
    ErrStat = ErrID_None
    ErrMsg = ""
@@ -1355,8 +1328,7 @@ subroutine UpdatePhi_PerElementUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, ErrM
             cycle
          endif
 
-         ! Compute per-element U_ref_sq with yaw correction (KEY FIX!)
-         ! This matches the rotor-averaged approach but uses local Vx
+         ! Compute per-element U_ref_sq with yaw correction
          VxCorrected = u%Vx(i,j) * cos(u%cantAngle(i,j)) + u%xVelCorr(i,j)
          if (abs(cos(u%CHI0)) > 0.1_ReKi) then
             U_ref_sq = VxCorrected**2 / (cos(u%CHI0)**2)
@@ -1370,7 +1342,7 @@ subroutine UpdatePhi_PerElementUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, ErrM
          ap_local = 0.0_ReKi
          ValidPhi(i,j) = .false.
 
-         ! Fixed-point iteration on axial induction (mirrors rotor-averaged approach)
+         ! Fixed-point iteration on axial induction
          do iter = 1, MAX_ITER
             a_old = a_local
 
@@ -1387,8 +1359,15 @@ subroutine UpdatePhi_PerElementUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, ErrM
                if (ErrStat >= AbortErrLev) return
             endif
 
+            ! Apply node-dependent F floor for UMM stability
+            ! Inner/mid nodes: 0.01; outer 2 tip nodes: 0.2 (tip region where BEM breaks down)
+            if (i >= p%numBladeNodes - 1) then
+               F_local = max(F_local, 0.2_ReKi)  ! Tip nodes
+            else
+               F_local = max(F_local, 0.01_ReKi)  ! Normal nodes
+            endif
+
             ! Step 3: Call UMM to get new axial induction
-            ! Reuse the rotor-averaged UMM solve - it works with any CT/F
             call UMM_SolveForAxialInduction(u%CHI0, CT_local, F_local, a_new)
 
             ! Step 4: Compute tangential induction from new axial induction
@@ -1494,91 +1473,37 @@ subroutine calculate_Inductions_from_BEMT(p,phi,u,OtherState,m,AFInfo,axInductio
    ErrMsg = ""
 
    !=========================================================================
-   ! UMM with rotor-averaged CT (matches MITRotor reference approach)
+   ! UMM per-element: Use values computed in UpdatePhi_PerElementUMM.
+   ! The per-element induction values are already stored in m%AxInduction
+   ! and m%TanInduction - copy them to the output arrays.
    !=========================================================================
    if (p%MomentumCorr == MomCorr_UMM) then
 
-      ! Compute U_ref_sq: freestream reference velocity squared for CT normalization
-      ! This matches MITRotor's U=1 normalization
-      U_ref_sq = 0.0_ReKi
-      weight_sum = 0.0_ReKi
-      do j = 1, p%numBlades
-         do i = 1, p%numBladeNodes
-            U_ref_sq = U_ref_sq + u%Vx(i,j)**2 * p%IntegrateWeight(i,j)
-            weight_sum = weight_sum + p%IntegrateWeight(i,j)
-         end do
-      end do
-      if (weight_sum > 0.0_ReKi) then
-         U_ref_sq = U_ref_sq / weight_sum
-         ! Correct for yaw
-         if (abs(cos(u%CHI0)) > 0.1_ReKi) then
-            U_ref_sq = U_ref_sq / (cos(u%CHI0)**2)
-         endif
-      else
-         U_ref_sq = 1.0_ReKi
-      endif
-      U_ref_sq = max(U_ref_sq, 1.0_ReKi)
-
-      ! --- Pass 1: Compute rotor-averaged CT ---
-      ! Use stored induction from previous step (m%AxInduction, m%TanInduction)
-      CT_rotor_avg = 0.0_ReKi
-      F_sum = 0.0_ReKi
-      do j = 1, p%numBlades
-         do i = 1, p%numBladeNodes
-            if (.not. OtherState%ValidPhi(i,j)) cycle
-
-            ! Get stored induction values
-            a_local = 0.333_ReKi  ! Default
-            ap_local = 0.0_ReKi
-            if (allocated(m%AxInduction)) a_local = m%AxInduction(i,j)
-            if (allocated(m%TanInduction)) ap_local = m%TanInduction(i,j)
-
-            call BEMTU_ComputeLocalCT(p, u, i, j, phi(i,j), a_local, ap_local, U_ref_sq, AFInfo(p%AFIndx(i,j)), &
-                                      CT_local, Cy_local, F_local, ErrStat2, ErrMsg2)
-            if (ErrStat2 /= ErrID_None) then
-               call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName//trim(NodeText(i,j)))
-               if (ErrStat >= AbortErrLev) return
-            endif
-
-            ! Accumulate weighted averages
-            CT_rotor_avg = CT_rotor_avg + CT_local * p%IntegrateWeight(i,j)
-            F_sum = F_sum + F_local * p%IntegrateWeight(i,j)
-
-            if (present(F_out)) F_out(i,j) = F_local
-         end do
-      end do
-      F_avg = max(F_sum, 0.0001_ReKi)
-
-      ! --- Call UMM once with rotor-averaged CT ---
-      call UMM_SolveForAxialInduction(u%CHI0, CT_rotor_avg, F_avg, a_rotor)
-
-      ! --- Pass 2: Distribute uniform axial induction, compute local tangential ---
       do j = 1, p%numBlades
          do i = 1, p%numBladeNodes
             if (OtherState%ValidPhi(i,j)) then
-               axInduction(i,j) = a_rotor
+               ! Axial induction from per-element UMM solve
+               if (allocated(m%AxInduction)) then
+                  axInduction(i,j) = m%AxInduction(i,j)
+               else
+                  axInduction(i,j) = 0.333_ReKi  ! Fallback
+               endif
 
-               ! Compute tangential induction per element using local aerodynamics
-               ap_local = 0.0_ReKi
-               if (allocated(m%TanInduction)) ap_local = m%TanInduction(i,j)
-               call BEMTU_ComputeLocalCT(p, u, i, j, phi(i,j), a_rotor, ap_local, U_ref_sq, AFInfo(p%AFIndx(i,j)), &
-                                         CT_local, Cy_local, F_local, ErrStat2, ErrMsg2)
-
-               ! Compute local tangential induction using getTangentialInduction
-               sphi = sin(real(phi(i,j), R8Ki))
-               cphi = cos(real(phi(i,j), R8Ki))
-               sigma_p = real(p%numBlades, R8Ki) * real(p%chord(i,j), R8Ki) / (TwoPi_R8 * real(u%rlocal(i,j), R8Ki))
-               VxCorrected = real(u%Vx(i,j), R8Ki) * cos(real(u%cantAngle(i,j), R8Ki)) + real(u%xVelCorr(i,j), R8Ki)
-
-               call getTangentialInduction(real(a_rotor, R8Ki), cphi, sphi, u%Vx(i,j), F_local, &
-                    1.0_R8Ki, sigma_p, Cy_local, VxCorrected, real(u%CHI0, R8Ki), 1.0_R8Ki, &
-                    MomCorr_UMM, ap_R8, kp_R8)
-               tanInduction(i,j) = real(ap_R8, ReKi)
+               if (allocated(m%TanInduction)) then
+                  tanInduction(i,j) = m%TanInduction(i,j)
+               else
+                  tanInduction(i,j) = 0.0_ReKi
+               endif
 
                call limitInductionFactors(axInduction(i,j), tanInduction(i,j))
 
                if (present(k_out)) k_out(i,j) = 0.0_ReKi
-               if (present(kp_out)) kp_out(i,j) = real(kp_R8, ReKi)
+               if (present(kp_out)) kp_out(i,j) = 0.0_ReKi
+               if (present(F_out)) then
+                  ! Compute F for output
+                  F_out(i,j) = getHubTipLossCorrection(p%BEM_Mod, p%useHubLoss, p%useTipLoss, &
+                               p%hubLossConst(i,j), p%tipLossConst(i,j), phi(i,j), u%cantAngle(i,j))
+               endif
             else
                axInduction(i,j) = 0.0_ReKi
                tanInduction(i,j) = 0.0_ReKi
@@ -2067,9 +1992,9 @@ subroutine ApplySkewedWakeCorrection_AllNodes(p, u, m, x, phi, OtherState, axInd
    
    !............................................
    ! Apply skewed wake correction to the axial induction (y%axInduction)
-   ! NOTE: Skip for UMM since UMM physics already account for yaw effects
+   ! Controlled by SkewRedistr_Mod setting
    !............................................
-   if ( p%skewWakeMod == Skew_Mod_Active .and. p%MomentumCorr /= MomCorr_UMM ) then
+   if ( p%skewWakeMod == Skew_Mod_Active ) then
       if (p%BEM_Mod==BEMMod_2D) then
          ! do nothing
       else

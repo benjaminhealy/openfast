@@ -7,9 +7,8 @@
 !   - File I/O routines to read pressure table from external file
 !   - Uses bilinear interpolation of pre-cached pressure lookup table
 !
-! Reference Paper: Liew et al. 2024 - https://www.nature.com/articles/s41467-024-50756-5
-! Supplementary Information: https://static-content.springer.com/esm/art%3A10.1038%2Fs41467-024-50756-5/MediaObjects/41467_2024_50756_MOESM1_ESM.pdf
-! Code Source (Python): https://github.com/Howland-Lab/Unified-Momentum-Model/
+! Ref: Liew et al. 2024 (doi:10.1038/s41467-024-50756-5)
+! Ref: MITRotor git repo (Howland-Lab/Unified-Momentum-Model)
 !
 !**********************************************************************************************************************************
 module UMM_Pressure

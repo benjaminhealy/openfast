@@ -5,10 +5,10 @@
 ! This module contains:
 !   - UMM iteration parameters (BETA, V4_CORR, MAX_ITER, TOLERANCE, RELAXATION)
 !   - computeUMMResiduals6: Compute the 6 UMM residual equations
-!   - getUMMInitialGuess: Get initial guess for UMM iteration (using LimitedHeck from https://github.com/Howland-Lab/Unified-Momentum-Model/blob/main/UnifiedMomentumModel/Momentum.py)
+!   - getUMMInitialGuess: Get initial guess for UMM iteration
 !
-! Reference Paper: Liew et al. 2024 - https://www.nature.com/articles/s41467-024-50756-5
-! Code Source (Python): https://github.com/Howland-Lab/Unified-Momentum-Model/blob/main/UnifiedMomentumModel/Momentum.py
+! Ref: Liew et al. 2024 (doi:10.1038/s41467-024-50756-5)
+! Ref: MITRotor git repo (Howland-Lab/Unified-Momentum-Model)
 !
 !**********************************************************************************************************************************
 module UMM_FixedPointIteration
@@ -22,16 +22,10 @@ module UMM_FixedPointIteration
 
    !-------------------------------------------------------------------------------------------------
    ! UMM Iteration Parameters
-   ! From Python ThrustBasedUnified class (lines 329-330)
    !-------------------------------------------------------------------------------------------------
-   integer(IntKi), public, parameter :: UMM_MAX_ITER = 10000         ! Maximum iterations (ThrustBasedUnified uses 10k)
+   integer(IntKi), public, parameter :: UMM_MAX_ITER = 10000         ! Maximum iterations
    real(R8Ki),     public, parameter :: UMM_TOLERANCE = 1.0e-5_R8Ki  ! Convergence tolerance on residuals
-   real(R8Ki),     public, parameter :: UMM_RELAXATION = 0.4_R8Ki    ! Relaxation factor (ThrustBasedUnified: [0.4, 0.6])
-
-   ! NOTE: OpenFAST has existing parameters that could be reused, but the appropriate tol and max_iter may vary:
-   !   p%aTol             - tolerance for outer Brent's method iteration solve for induction (from input file, default 5e-5)
-   !   p%maxIndIterations - maximum iterations for outer Brent's method solve for induction (from input file, default 300)
-   ! Hardcoding UMM iteration settings for now (TODO)
+   real(R8Ki),     public, parameter :: UMM_RELAXATION = 0.4_R8Ki    ! Relaxation factor
 
    !-------------------------------------------------------------------------------------------------
    ! UMM Physical Constants
@@ -47,35 +41,20 @@ module UMM_FixedPointIteration
 
 contains
 
-   !> Compute the 6 UMM residual equations (ThrustBasedUnified model)
-   !! x = (an, u4, v4, x0, dp, Ctprime)
-   !!
-   !! The 6 equations are:
-   !!   Eq 1: Rotor-normal induction (Eq. 1 in Liew et al 2024)
-   !!   Eq 2: Streamwise outlet velocity (Eq. 2 in Liew et al 2024)
-   !!   Eq 3: Lateral outlet velocity (Eq. 3 in Liew 2et al 024)
-   !!   Eq 4: Near-wake length (Eq. 4 in Liew et al 2024)
-   !!   Eq 5: Outlet pressure drop (Eq. 5 in Liew et al 2024)
-   !!   Eq 6: CT-Ctprime relationship (Eq. 6 in Liew et al 2024)
-   !!
-   !! @param x = (an, u4, v4, x0, dp, Ctprime)
-   !! @param CT Thrust coefficient computed directly from blade element (matches MITRotor formulation)
-   !! @param k Thrust parameter from BEM (kept for comparison logging only)
-   !! @param F Tip/hub loss factor
-   !! @param eff_yaw Effective yaw angle [rad]
-   !! @param residuals Output residuals
+   !> Compute the 6 UMM residual equations (Liew et al. 2024, Eq. 1-6)
+   !! State vector x = (an, u4, v4, x0, dp, Ctprime)
    subroutine computeUMMResiduals6(x, CT, k, F, eff_yaw, residuals)
       implicit none
       real(R8Ki), intent(in)  :: x(6)         !< x = (an, u4, v4, x0, dp, Ctprime)
-      real(R8Ki), intent(in)  :: CT           !< Thrust coefficient (direct from blade element, no sin^2(phi) singularity)
-      real(R8Ki), intent(in)  :: k            !< Thrust parameter from BEM (for comparison logging only)
+      real(R8Ki), intent(in)  :: CT           !< Thrust coefficient from velocity-based formulation
+      real(R8Ki), intent(in)  :: k            !< Thrust parameter from BEM (for logging only)
       real(ReKi), intent(in)  :: F            !< Tip/hub loss factor
       real(R8Ki), intent(in)  :: eff_yaw      !< Effective yaw angle [rad]
       real(R8Ki), intent(out) :: residuals(6) !< Output residuals
 
       ! Local variables (x) to solve via fixed point iteration
       real(R8Ki) :: an, u4, v4, x0_val, dp, Ctprime
-      ! Intermediate calculations for system of equations (Liew et al 2024 Eq. 1 - 6)
+      ! Intermediate calculations
       real(R8Ki) :: cos_eff_yaw, cos_eff_yaw2, sin_eff_yaw
       real(R8Ki) :: CT_used, CT_iter, dp_half, p_g, p_linear
       real(R8Ki) :: term1, term2_sqrt_arg, sqrt_arg1
@@ -89,17 +68,17 @@ contains
       dp      = x(5)
       Ctprime = x(6)
 
-      ! Precompute trigonometric terms w.r.t. skewed inflow
+      ! Precompute trigonometric terms
       cos_eff_yaw  = cos(eff_yaw)
       cos_eff_yaw2 = cos_eff_yaw**2
       sin_eff_yaw  = sin(eff_yaw)
 
-      ! Avoid cos2(yaw) = 0 to prevent numerical instability in Eq. 1
+      ! Floor cos^2(yaw) to prevent division by zero
       if (cos_eff_yaw2 < 1.0e-10_R8Ki) then
          cos_eff_yaw2 = 1.0e-10_R8Ki
       endif
 
-      ! Handle CT=0 scenario and avoid numerical instability in Eq. 1
+      ! Handle CT=0 scenario
       if (abs(Ctprime) < 1.0e-10_R8Ki) then
          residuals(1) = -an                  ! an = an - an = 0
          residuals(2) = 1.0_R8Ki - u4        ! u4 = u4 + (1 - u4) = 1
@@ -110,28 +89,11 @@ contains
          return
       endif
 
-      ! CT calculated from velocity-based formulation to avoid numerical instabilty observed in k-based approach when phi is small
       CT_used = CT
-
-      ! Clamp CT to physically reasonable bounds
       CT_used = max(-4.0_R8Ki, min(CT_used, 10.0_R8Ki))
 
-      !------------------------------------------------------------------------
-      ! OLD: Compute CT from k and current an
-      ! This approach had a singularity when phi -> 0 because k = sigma*Cn/(4F*sin^2(phi))
-      ! CT = 4*F*k*(1-an)^2
-      ! CT_old = 4.0_R8Ki * real(F, R8Ki) * k * (1.0_R8Ki - an)**2
-      ! CT_old = max(-4.0_R8Ki, min(CT_old, 10.0_R8Ki))
-      !------------------------------------------------------------------------
-
-      ! Get nonlinear pressure correction from table
-      ! Following MITRotor reference: CT for pressure lookup is computed from current
-      ! iteration values of Ctprime and an
-      ! This matches _nonlinear_pressure() in MITRotor/UnifiedMomentumModel/Momentum.py:302-305
-      !
-      ! CT_iter = Ctprime * (1-an)^2 * cos^2(yaw)
-      ! dp_half = CT_iter / 2
-      !
+      ! Nonlinear pressure correction from lookup table
+      ! CT_iter = Ctprime * (1-an)^2 * cos^2(yaw); dp_half = CT_iter / 2
       CT_iter = Ctprime * (1.0_R8Ki - an)**2 * cos_eff_yaw2
       CT_iter = max(-4.0_R8Ki, min(CT_iter, 10.0_R8Ki))  ! Clamp to reasonable bounds
       dp_half = CT_iter / 2.0_R8Ki
@@ -140,13 +102,9 @@ contains
       p_g = interpolatePressureTable(dp_half, max(x0_val, 0.01_R8Ki))
 
       !------------------------------------------------------------------------
-      ! Equation 1: Rotor-normal induction (Eq. 1 in Liew et al 2024)
+      ! Eq. 1: Rotor-normal induction (Liew et al. 2024)
       ! an = 1 - sqrt(-dp/(0.5*Ctprime*cos^2(yaw)) + (1-u4^2-v4^2)/(Ctprime*cos^2(yaw)))
-      !
-      ! NOTE: velocities are non-dimensionalized by normalizing by u_inf 
-      ! (u_inf is non-dimensionalized to 1 via normalization and therefore vanishes from several terms in the equations below)
-      !
-      ! NOTE: density is already encoded in the denominator of dp = Δp / (ρ * u∞²)
+      ! Velocities non-dimensionalized by u_inf; dp = delta_p / (rho * u_inf^2)
       !------------------------------------------------------------------------
       sqrt_arg1 = -dp / (0.5_R8Ki * Ctprime * cos_eff_yaw2) + &
                   (1.0_R8Ki - u4**2 - v4**2) / (Ctprime * cos_eff_yaw2)
@@ -159,7 +117,7 @@ contains
       residuals(1) = an_new - an
 
       !------------------------------------------------------------------------
-      ! Equation 2: Streamwise outlet velocity (Eq. 2 in Liew et al 2024)
+      ! Eq. 2: Streamwise outlet velocity (Liew et al. 2024)
       ! u4 = -0.25*Ctprime*(1-an)*cos^2(yaw) + 0.5 + 0.5*sqrt((0.5*Ctprime*(1-an)*cos^2(yaw)-1)^2 - 4*dp)
       !------------------------------------------------------------------------
       term1 = -0.25_R8Ki * Ctprime * (1.0_R8Ki - an) * cos_eff_yaw2
@@ -174,7 +132,7 @@ contains
       residuals(2) = u4_new - u4
 
       !------------------------------------------------------------------------
-      ! Equation 3: Lateral outlet velocity (Eq. 3 in Liew et al 2024)
+      ! Eq. 3: Lateral outlet velocity (Liew et al. 2024)
       ! v4 = -v4_corr * 0.25 * Ctprime * (1-an)^2 * sin(yaw) * cos^2(yaw)
       !------------------------------------------------------------------------
       v4_new = -UMM_V4_CORR * 0.25_R8Ki * Ctprime * (1.0_R8Ki - an)**2 * &
@@ -182,10 +140,9 @@ contains
       residuals(3) = v4_new - v4
 
       !------------------------------------------------------------------------
-      ! Equation 4: Near-wake length (Eq. 4 in Liew et al 2024)
+      ! Eq. 4: Near-wake length (Liew et al. 2024)
       ! x0 = cos(yaw)/(2*beta) * (1+u4)/|1-u4| * sqrt((1-an)*cos(yaw)/(1+u4))
-      !
-      ! NOTE: x0_val is non-dimensionalized by D, thus D is not included in Eq. 4 and 5
+      ! x0 is non-dimensionalized by D
       !------------------------------------------------------------------------
       if (abs(1.0_R8Ki - u4) > 1.0e-10_R8Ki .and. (1.0_R8Ki + u4) > 1.0e-10_R8Ki .and. &
          (1.0_R8Ki - an) * cos_eff_yaw / (1.0_R8Ki + u4) >= 0.0_R8Ki) then
@@ -201,7 +158,7 @@ contains
       residuals(4) = x0_new - x0_val
 
       !------------------------------------------------------------------------
-      ! Equation 5: Outlet pressure drop (Eq. 5 in Liew et al 2024)
+      ! Eq. 5: Outlet pressure drop (Liew et al. 2024)
       ! dp = p_linear + p_g
       ! where p_linear = -(1/(2*pi)) * Ctprime * (1-an)^2 * cos^2(yaw) * atan(1/(2*x0))
       !------------------------------------------------------------------------
@@ -211,11 +168,8 @@ contains
       residuals(5) = dp_new - dp
 
       !------------------------------------------------------------------------
-      ! Equation 6: CT-Ctprime relationship (Eq. 6 in Liew et al 2024)
+      ! Eq. 6: CT-Ctprime relationship (Liew et al. 2024)
       ! Ctprime = CT / ((1-an)^2 * cos^2(yaw))
-      !
-      ! NEW: CT is now the direct input (computed from blade element velocity formulation)
-      ! OLD: CT was computed from k as CT = 4*F*k*(1-an)^2, which had sin^2(phi) singularity
       !------------------------------------------------------------------------
       if (abs(1.0_R8Ki - an) > 1.0e-10_R8Ki) then
          Ctprime_new = CT_used / ((1.0_R8Ki - an)**2 * cos_eff_yaw2)
@@ -226,18 +180,12 @@ contains
 
    end subroutine computeUMMResiduals6
 
-   !> Get initial guess for UMM iteration using ThrustBasedUnified approach
-   !! Reference: https://github.com/Howland-Lab/Unified-Momentum-Model/blob/main/UnifiedMomentumModel/Momentum.py, ThrustBasedUnified.initial_guess
-   !!
-   !! @param CT Thrust coefficient computed directly from blade element
-   !! @param k Thrust parameter from BEM (kept for comparison logging only)
-   !! @param F Tip/hub loss factor
-   !! @param eff_yaw Effective yaw angle [rad]
-   !! @param x0_state Output initial state vector: (an, u4, v4, x0, dp, Ctprime)
+   !> Get initial guess for UMM state vector
+   !! Ref: MITRotor git repo (Howland-Lab/Unified-Momentum-Model)
    subroutine getUMMInitialGuess(CT, k, F, eff_yaw, x0_state)
       implicit none
-      real(R8Ki), intent(in)  :: CT          !< Thrust coefficient (direct from blade element, no sin^2(phi) singularity)
-      real(R8Ki), intent(in)  :: k           !< Thrust parameter from BEM (for comparison logging only)
+      real(R8Ki), intent(in)  :: CT          !< Thrust coefficient from velocity-based formulation
+      real(R8Ki), intent(in)  :: k           !< Thrust parameter from BEM (for logging only)
       real(ReKi), intent(in)  :: F           !< Tip/hub loss factor
       real(R8Ki), intent(in)  :: eff_yaw     !< Effective yaw angle [rad]
       real(R8Ki), intent(out) :: x0_state(6) !< Initial state vector: (an, u4, v4, x0, dp, Ctprime)
@@ -247,44 +195,26 @@ contains
 
       cos_eff_yaw2 = cos(eff_yaw)**2
 
-      ! Avoid cos2(yaw) = 0 to prevent numerical instability in Eq. 1
+      ! Floor cos^2(yaw) to prevent division by zero
       if (cos_eff_yaw2 < 1.0e-10_R8Ki) then
          cos_eff_yaw2 = 1.0e-10_R8Ki
       endif
 
-      ! CT calculated from velocity-based formulation to avoid numerical instabilty observed in k-based approach when phi is small
       CT_used = CT
-
-      ! Clamp CT to physically reasonable bounds
       CT_used = max(-4.0_R8Ki, min(CT_used, 10.0_R8Ki))
-
-      !------------------------------------------------------------------------
-      ! OLD (COMMENTED OUT): Initial CT estimate assuming an ≈ 1/3
-      ! CT = 4*F*k*(1-an)^2 ≈ 4*F*k*(2/3)^2 = 4*F*k*(4/9) from OpenFAST BEM solution
-      ! This had the sin^2(phi) singularity embedded in k
-      !
-      ! if (abs(k) < 1.0e-10_R8Ki) then
-      !    CT_init = 0.0_R8Ki
-      ! else
-      !    CT_init = 4.0_R8Ki * real(F, R8Ki) * k * (1.0_R8Ki - 1.0_R8Ki/3.0_R8Ki)**2
-      ! endif
-      ! CT_init = max(-4.0_R8Ki, min(CT_init, 10.0_R8Ki))
-      !------------------------------------------------------------------------
 
       ! Initial guess for axial induction
       an_init = 0.5_R8Ki * CT_used
       an_init = max(0.0_R8Ki, min(an_init, 0.9_R8Ki))  ! Bound to reasonable range
 
-      ! Initial Ctprime estimate - use simple sign(CT) to match MITRotor reference implementation
-      ! Previous approach: Ctprime_init = CT_used / ((1-an_init)^2 * cos^2(yaw))
-      ! This caused extreme values at high yaw angles, pushing iteration into ill-conditioned regions
+      ! Initial Ctprime estimate (sign only, to avoid extreme values at high yaw)
       Ctprime_init = sign(1.0_R8Ki, CT_used)
 
       ! x = (an, u4, v4, x0, dp, Ctprime)
       x0_state(1) = an_init                  ! Axial induction
       x0_state(2) = 1.0_R8Ki - CT_used       ! Streamwise outlet velocity
       x0_state(3) = 0.0_R8Ki                 ! Lateral outlet velocity (zero initially)
-      x0_state(4) = 100.0_R8Ki               ! Near-wake length (matches MITRotor default)
+      x0_state(4) = 100.0_R8Ki               ! Near-wake length (default)
       x0_state(5) = 0.0_R8Ki                 ! Pressure drop (zero initially)
       x0_state(6) = Ctprime_init             ! Initial Ctprime estimate
 

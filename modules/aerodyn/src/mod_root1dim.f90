@@ -11,8 +11,7 @@
 module mod_root1dim
    use NWTC_Library
    use AirFoilInfo_Types
-   use BEMTUnCoupled, only: BEMTU_InductionWithResidual, &
-                           UMM_ResetBrentSolveStats, UMM_IncrementBrentEvalCount, UMM_LogBrentConvergence
+   use BEMTUnCoupled, only: BEMTU_InductionWithResidual
    use BEMT_Types
    
     implicit none
@@ -79,9 +78,6 @@ subroutine sub_brent(bemt_parameters, bemt_inputs, iBladeNode, jBlade, x,a_in,b_
     ErrStat = ErrID_None
     ErrMsg = ""
 
-    ! Reset per-Brent-solve fallback tracking
-    call UMM_ResetBrentSolveStats()
-
     ! Set the user chosen tolerance t to xtoler
     if (xtoler<0.0_SolveKi) then
         CALL WrScr('WARNING: xtoler must be positive. Resetting xtoler.')
@@ -96,13 +92,11 @@ subroutine sub_brent(bemt_parameters, bemt_inputs, iBladeNode, jBlade, x,a_in,b_
         ErrStat_a = ErrID_None
         ErrMsg_a = ""
     else
-        call UMM_IncrementBrentEvalCount()
         fa = BEMTU_InductionWithResidual(bemt_parameters, bemt_inputs, iBladeNode, jBlade, a, AFInfo, ValidPhi_a, errStat_a, errMsg_a)
     end if
     if (present(fb_in)) then
         fb = fb_in
     else
-        call UMM_IncrementBrentEvalCount()
         fb = BEMTU_InductionWithResidual(bemt_parameters, bemt_inputs, iBladeNode, jBlade, b, AFInfo, IsValidSolution, errStat, errMsg)
     end if
 
@@ -153,7 +147,6 @@ subroutine sub_brent(bemt_parameters, bemt_inputs, iBladeNode, jBlade, x,a_in,b_
         ! If taking a bisection step would move the guess of the root less than tol, then return b the best guess.
         if ((abs(m)<=tol) .or. (fb==0.0_SolveKi)) then
             x = b
-            call UMM_LogBrentConvergence(iBladeNode, jBlade, b, .true.)
             return
         end if
 
@@ -227,16 +220,14 @@ subroutine sub_brent(bemt_parameters, bemt_inputs, iBladeNode, jBlade, x,a_in,b_
         end if
 
         !!! Evaluate at the new point
-        call UMM_IncrementBrentEvalCount()
         fb = BEMTU_InductionWithResidual(bemt_parameters, bemt_inputs, iBladeNode, jBlade, b, AFInfo, IsValidSolution, errStat, errMsg)
 
         ! Check my custom tolerance
         if (abs(fb)<toler) then
             x = b
-            call UMM_LogBrentConvergence(iBladeNode, jBlade, b, .true.)
             return
         end if
-            
+
     end do
 
 end subroutine sub_brent

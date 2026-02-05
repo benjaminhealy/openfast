@@ -25,13 +25,14 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 # ============================================================================
-# CONFIGURATION
+# Configuration
 # ============================================================================
 
 # Build to use (single build, iterate SkewMomCorr at runtime)
 BUILDS = {
     # 'UMM': '/Users/benhealy/OpenFAST/build-UMM/glue-codes/openfast/openfast',
-    'UMM': '/Users/benhealy/OpenFAST/build-UMM-rev2/glue-codes/openfast/openfast',
+    # 'UMM': '/Users/benhealy/OpenFAST/build-UMM-rev2/glue-codes/openfast/openfast',
+    'UMM': '/Users/benhealy/OpenFAST/build-UMM-uncoupled/glue-codes/openfast/openfast',
 }
 
 # SkewMomCorr settings to compare
@@ -41,7 +42,7 @@ SKEW_MOM_CORR = {
     'UMM': 2,       # Unified Momentum Model (Liew et al 2024)
 }
 
-# Test matrix - FULL MATRIX for comprehensive validation
+# Test matrix - full matrix
 YAW_ANGLES = [-30, -20, -15, -10, -5, 0, 5, 10, 15, 20, 30]  # degrees
 WIND_SPEEDS = [6, 8, 10, 12, 14, 16, 18]  # m/s
 
@@ -50,7 +51,7 @@ WIND_SPEEDS = [6, 8, 10, 12, 14, 16, 18]  # m/s
 # WIND_SPEEDS = [8]
 
 # Paths
-WORK_DIR = '/Users/benhealy/OpenFAST/Simulations/UMM_Testing/results_comp_UMM_large_matrix_20260126/'
+WORK_DIR = '/Users/benhealy/OpenFAST/Simulations/UMM_Testing/results_comp_UMM_uncoupled_full_matrix_20260204/'
 FST_FILE = '5MW_Land_BD_DLL_WTurb_Skewed_Loads.fst'
 OUTPUT_BASE = os.path.join(WORK_DIR, '5MW_Land_BD_DLL_WTurb_Skewed_Loads')
 
@@ -118,7 +119,7 @@ PRESERVE_OUT_FILES = True      # Set to True to keep .out files for DEL post-pro
 OUT_FILES_SUBDIR = 'out_files'  # Subdirectory for preserved .out files
 
 # ============================================================================
-# UTILITY FUNCTIONS
+# Utility functions
 # ============================================================================
 
 def modify_parameter(filepath, param_name, new_value):
@@ -165,7 +166,7 @@ def setup_aerodyn(aerodyn_path, wind_speed, skew_corr):
 def get_initial_pitch(wind_speed):
     """Get initial blade pitch for NREL 5MW based on wind speed.
 
-    Below rated: 0° (fine pitch for max Cp)
+    Below rated: 0 deg (fine pitch for max Cp)
     Above rated: Increases roughly linearly to limit power
 
     Based on NREL 5MW steady-state operating points.
@@ -176,10 +177,10 @@ def get_initial_pitch(wind_speed):
         return 0.0
     else:
         # Approximate pitch schedule above rated
-        # Roughly 0° at 11.4 m/s, ~6° at 14 m/s, ~12° at 18 m/s, ~23° at 25 m/s
-        # Linear approximation: pitch ≈ 1.7 * (V - 11.4)
+        # Roughly 0 deg at 11.4 m/s, ~6 deg at 14 m/s, ~12 deg at 18 m/s, ~23 deg at 25 m/s
+        # Linear approximation: pitch ~ 1.7 * (V - 11.4)
         pitch = 1.7 * (wind_speed - rated_wind_speed)
-        return min(pitch, 25.0)  # Cap at 25°
+        return min(pitch, 25.0)  # Cap at 25 deg
 
 
 def setup_elastodyn(elastodyn_path, wind_speed):
@@ -271,7 +272,7 @@ def extract_steady_state(output_file, columns, ss_fraction=0.3):
 
 
 # ============================================================================
-# PARALLEL JOB EXECUTION
+# Parallel job execution
 # ============================================================================
 
 def run_simulation_job(job_config):
@@ -395,7 +396,7 @@ def run_simulation_job(job_config):
 
 
 # ============================================================================
-# MAIN COMPARISON LOOP
+# Main comparison loop
 # ============================================================================
 
 def main():

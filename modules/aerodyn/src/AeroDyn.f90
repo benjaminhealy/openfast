@@ -4684,7 +4684,7 @@ SUBROUTINE Init_BEMTmodule( InputFileData, RotInputFileData, u_AD, u, p, p_AD, x
       print*,'Invalid BEM method'
       STOP
    endif
-   ! Updated INT logic for MomentumCorr to accomodate both Glauert and UMM methods
+   ! MomentumCorr mode selection: None, Glauert, or UMM
    If (InitInp%MomentumCorr == MomCorr_None) then
       Label = trim(Label)//', No skew correction'
 	elseif (InitInp%MomentumCorr == MomCorr_Glauert) then
