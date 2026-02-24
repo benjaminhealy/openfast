@@ -51,7 +51,7 @@ WIND_SPEEDS = [6, 8, 10, 12, 14, 16, 18]  # m/s
 # WIND_SPEEDS = [8]
 
 # Paths
-WORK_DIR = '/Users/benhealy/OpenFAST/Simulations/UMM_Testing/results_comp_UMM_uncoupled_full_matrix_20260204/'
+WORK_DIR = '/Users/benhealy/OpenFAST/Simulations/UMM_Testing/results_comp_UMM_uncoupled_full_matrix_20260205_rev2/'
 FST_FILE = '5MW_Land_BD_DLL_WTurb_Skewed_Loads.fst'
 OUTPUT_BASE = os.path.join(WORK_DIR, '5MW_Land_BD_DLL_WTurb_Skewed_Loads')
 
