@@ -1162,7 +1162,7 @@ subroutine UpdatePhi_RotorAveragedUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, E
          end do
       end do
       if (weight_sum_init > 0.0_ReKi) a_rotor = a_rotor / weight_sum_init
-      if (a_rotor <= 0.001_ReKi .or. a_rotor >= 0.95_ReKi) a_rotor = 0.333_ReKi
+      if (a_rotor < 0.0_ReKi .or. a_rotor >= 0.95_ReKi) a_rotor = 0.333_ReKi
    else
       a_rotor = 0.333_ReKi
    endif
@@ -1356,7 +1356,8 @@ subroutine UpdatePhi_PerElementUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, ErrM
          U_ref_sq = max(U_ref_sq, 1.0_ReKi)  ! Ensure positive
 
          ! Warm-start from previous converged induction (if available and reasonable)
-         if (m%AxInduction(i,j) > 0.001_ReKi .and. m%AxInduction(i,j) < 0.95_ReKi) then
+         ! Accept a >= 0.0 to allow near-zero tip values; reject when negative or near one
+         if (m%AxInduction(i,j) >= 0.0_ReKi .and. m%AxInduction(i,j) < 0.95_ReKi) then
             a_local = m%AxInduction(i,j)
          else
             a_local = 0.333_ReKi  ! Default for first timestep or out-of-range values
