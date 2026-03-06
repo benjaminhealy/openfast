@@ -1346,7 +1346,9 @@ subroutine UMM_SolveForAxialInduction(chi0, CT, F, axInd)
    end do
 
    ! Extract axial induction with bounds
-   axInd = real(max(0.0_R8Ki, min(state(1), 1.0_R8Ki)), ReKi)
+   ! Allow up to 1.5 for UMM turbulent wake state
+   ! somewhat arbitrary threshold for validation  (update with BEMT_MaxInduction(1) as needed)
+   axInd = real(max(0.0_R8Ki, min(state(1), 1.5_R8Ki)), ReKi)
 
 end subroutine UMM_SolveForAxialInduction
 
