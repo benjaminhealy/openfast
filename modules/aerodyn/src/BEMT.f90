@@ -1131,6 +1131,7 @@ subroutine UpdatePhi_RotorAveragedUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, E
    real(R8Ki) :: sphi, cphi, sigma_p, VxCorrected
    real(R8Ki) :: ap_R8, kp_R8
    integer(IntKi) :: i, j, iter
+   integer(IntKi) :: i_init, j_init         ! Loop indices for warm-start averaging
    integer(IntKi) :: ErrStat2
    character(ErrMsgLen) :: ErrMsg2
    character(*), parameter :: RoutineName = 'UpdatePhi_RotorAveragedUMM'
@@ -1140,6 +1141,7 @@ subroutine UpdatePhi_RotorAveragedUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, E
    real(ReKi) :: Vax, Vtan, W_sq            ! Induced velocities
    real(ReKi) :: U_ref_sq                   ! Freestream reference velocity squared for normalization
    real(ReKi) :: weight_sum                 ! Sum of integration weights
+   real(ReKi) :: weight_sum_init            ! Sum of integration weights for warm-start
    TYPE(AFI_OutputType) :: AFI_interp
 
    integer(IntKi), parameter :: MAX_ITER = 100
@@ -1149,8 +1151,21 @@ subroutine UpdatePhi_RotorAveragedUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, E
    ErrStat = ErrID_None
    ErrMsg = ""
 
-   ! Initialize axial induction
-   a_rotor = 0.333_ReKi
+   ! Warm-start from previous rotor-averaged induction
+   if (allocated(m%AxInduction)) then
+      a_rotor = 0.0_ReKi
+      weight_sum_init = 0.0_ReKi
+      do j_init = 1, p%numBlades
+         do i_init = 1, p%numBladeNodes
+            a_rotor = a_rotor + m%AxInduction(i_init, j_init) * p%IntegrateWeight(i_init, j_init)
+            weight_sum_init = weight_sum_init + p%IntegrateWeight(i_init, j_init)
+         end do
+      end do
+      if (weight_sum_init > 0.0_ReKi) a_rotor = a_rotor / weight_sum_init
+      if (a_rotor <= 0.001_ReKi .or. a_rotor >= 0.95_ReKi) a_rotor = 0.333_ReKi
+   else
+      a_rotor = 0.333_ReKi
+   endif
 
    ! Compute U_ref_sq: freestream reference velocity squared for CT normalization
    ! Uses disk-averaged Vx^2 with yaw correction via chi0
@@ -1267,6 +1282,9 @@ subroutine UpdatePhi_RotorAveragedUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, E
 
    end do
 
+   ! Diagnostic: report rotor-averaged iteration count
+   write(*,'(A,I4,A,F8.5)') '  UMM rotor-avg: iters=', min(iter, MAX_ITER), ' a_rotor=', a_rotor
+
    ! Store final axial induction values (uniform across rotor)
    if (allocated(m%AxInduction)) then
       m%AxInduction(:,:) = a_rotor
@@ -1337,9 +1355,17 @@ subroutine UpdatePhi_PerElementUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, ErrM
          endif
          U_ref_sq = max(U_ref_sq, 1.0_ReKi)  ! Ensure positive
 
-         ! Initialize induction for this element
-         a_local = 0.333_ReKi
-         ap_local = 0.0_ReKi
+         ! Warm-start from previous converged induction (if available and reasonable)
+         if (m%AxInduction(i,j) > 0.001_ReKi .and. m%AxInduction(i,j) < 0.95_ReKi) then
+            a_local = m%AxInduction(i,j)
+         else
+            a_local = 0.333_ReKi  ! Default for first timestep or out-of-range values
+         endif
+         if (abs(m%TanInduction(i,j)) < 1.0_ReKi) then
+            ap_local = m%TanInduction(i,j)
+         else
+            ap_local = 0.0_ReKi
+         endif
          ValidPhi(i,j) = .false.
 
          ! Fixed-point iteration on axial induction
@@ -1391,6 +1417,13 @@ subroutine UpdatePhi_PerElementUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, ErrM
             endif
 
          end do  ! iter
+
+         ! Diagnostic: report iteration counts for slow-converging elements
+         if (iter > 10 .or. .not. ValidPhi(i,j)) then
+            write(*,'(A,I3,A,I3,A,I4,A,L1,A,F8.5,A,F8.5)') &
+               '  UMM node(', i, ',', j, '): iters=', min(iter, MAX_ITER), &
+               ' converged=', ValidPhi(i,j), ' a_init=', m%AxInduction(i,j), ' a_final=', a_local
+         endif
 
          ! Store final induction values
          if (allocated(m%AxInduction))  m%AxInduction(i,j)  = a_local
