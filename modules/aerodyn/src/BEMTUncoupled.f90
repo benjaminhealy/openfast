@@ -35,6 +35,8 @@ module BEMTUnCoupled
    
    real(ReKi),     public, parameter  :: BEMT_MaxInduction(2) = (/1.5_ReKi, 1.0_ReKi /)  ! largest magnitude of axial (1) and tangential (2) induction factors
    real(ReKi),     public, parameter  :: BEMT_MinInduction(2) = -1.0_ReKi
+   ! BH: modifying to allow simulations in high-thrust regimes for UMM comparison
+   real(ReKi),     public, parameter  :: BEMT_MaxCT = 10.0_ReKi
 
    real(ReKi),     public, parameter  :: BEMT_lowerBoundTSR = 1.0_ReKi
    real(ReKi),     public, parameter  :: BEMT_upperBoundTSR = 2.0_ReKi 
@@ -529,7 +531,8 @@ subroutine BEMTU_ComputeLocalCT(p, u, i, j, phi, a_rotor, ap_local, U_ref_sq, AF
       ! CT = sigma * Cn * (W/U_ref)^2 * drdz / F
       CT_local = sigma_p * Cx * W_sq / U_ref_sq * u%drdz(i,j)
       CT_local = CT_local / F    ! Tip-loss correction
-      CT_local = max(0.0_ReKi, min(CT_local, 1.69_ReKi))  ! Clamp
+      ! BH: modifying to allow simulations in high-thrust regimes for UMM comparison
+      CT_local = max(0.0_ReKi, min(CT_local, BEMT_MaxCT))
    endif
 
    ! Also return tangential coefficient for computing tangential induction later
@@ -1218,8 +1221,8 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
          a_from_phi = 0.1_R8Ki
       endif
 
-      ! Clamp to valid momentum range
-      a_from_phi = max(-0.1_R8Ki, min(a_from_phi, 0.95_R8Ki))
+      ! BH: modifying to allow simulations in high-thrust regimes for UMM comparison
+      a_from_phi = max(-0.1_R8Ki, min(a_from_phi, real(BEMT_MaxInduction(1), R8Ki)))
 
       ! Compute Vrel^2 = VxCorrected^2*(1-a)^2 + Vy^2*(1+a')^2
       Vrel_sq = (VxCorrected * (1.0_R8Ki - a_from_phi))**2 + (real(Vy,R8Ki) * (1.0_R8Ki + ap_used))**2
@@ -1230,8 +1233,8 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
       ! Divide by tip-loss factor (F floor of 0.01 for numerical stability near tip)
       CT_direct = CT_direct / max(real(F, R8Ki), 0.01_R8Ki)
 
-      ! Clamp CT to [0, 1.69]
-      CT_direct = max(0.0_R8Ki, min(CT_direct, 1.69_R8Ki))
+      ! BH: modifying to allow simulations in high-thrust regimes for UMM comparison
+      CT_direct = max(0.0_R8Ki, min(CT_direct, real(BEMT_MaxCT, R8Ki)))
 
    else
       ! Velocity parameters not available - fall back to 1D momentum
@@ -1289,7 +1292,8 @@ subroutine UMM_SolveForAxialInduction(chi0, CT, F, axInd)
    logical    :: converged
    integer    :: iter, stage
 
-   CT_used = real(max(0.0_ReKi, min(CT, 1.69_ReKi)), R8Ki)
+   ! BH: modifying to allow simulations in high-thrust regimes for UMM comparison
+   CT_used = real(max(0.0_ReKi, min(CT, BEMT_MaxCT)), R8Ki)
 
    ! Adaptive multi-stage fixed-point iteration with fresh restart per stage
    converged = .false.
