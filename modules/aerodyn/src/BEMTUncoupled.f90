@@ -1158,6 +1158,7 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
    real(R8Ki) :: max_resid                            !< Maximum absolute residual
    real(R8Ki) :: relax_factor                         !< Adaptive relaxation factor
    integer(IntKi) :: iter                             !< Iteration counter
+   integer(IntKi) :: stage                            !< Adaptive relaxation stage
    logical :: converged                               !< Convergence flag
 
    ! Local variables for CT calculation
@@ -1240,44 +1241,26 @@ subroutine axialInductionFromUnifiedMomentum(chi0, phi, k, F, axInd, H, Vx, Vy, 
    endif
 
    !---------------------------------------------------------------------------
-   ! Initialize UMM state vector: (an, u4, v4, x0, dp, Ctprime)
-   !---------------------------------------------------------------------------
-   call getUMMInitialGuess(CT_direct, k, F, chi0, state)
-
-   !---------------------------------------------------------------------------
-   ! Fixed-point iteration loop (adaptive relaxation)
+   ! Adaptive multi-stage fixed-point iteration with fresh restart per stage
    !---------------------------------------------------------------------------
    converged = .false.
-   do iter = 1, UMM_MAX_ITER
+   do stage = 1, UMM_NUM_STAGES
+      call getUMMInitialGuess(CT_direct, k, F, chi0, state)
+      relax_factor = UMM_RELAXATIONS(stage)
 
-      ! Compute residuals for all 6 equations
-      call computeUMMResiduals6(state, CT_direct, k, F, chi0, residuals)
+      do iter = 1, UMM_MAX_ITER_PER_STAGE
+         call computeUMMResiduals6(state, CT_direct, k, F, chi0, residuals)
 
-      ! Check convergence
-      max_resid = maxval(abs(residuals))
-      if (max_resid < UMM_TOLERANCE) then
-         converged = .true.
-         exit
-      endif
+         max_resid = maxval(abs(residuals))
+         if (max_resid < UMM_TOLERANCE) then
+            converged = .true.
+            exit
+         endif
 
-      ! Update state with adaptive relaxation
-      if (iter < 100) then
-         relax_factor = 0.3_R8Ki
-      elseif (max_resid > 0.1_R8Ki) then
-         relax_factor = 0.4_R8Ki
-      else
-         relax_factor = 0.5_R8Ki
-      endif
-      state = state + (1.0_R8Ki - relax_factor) * residuals
+         state = state + (1.0_R8Ki - relax_factor) * residuals
+      end do
 
-      ! Apply bounds to prevent divergence
-      state(1) = max(-1.5_R8Ki, min(state(1), 1.5_R8Ki))
-      state(2) = max(-3.0_R8Ki, min(state(2), 2.5_R8Ki))
-      state(3) = max(-2.0_R8Ki, min(state(3), 2.0_R8Ki))
-      state(4) = max(0.01_R8Ki, min(state(4), 100.0_R8Ki))
-      state(5) = max(-2.0_R8Ki, min(state(5), 0.5_R8Ki))
-      state(6) = max(-10.0_R8Ki, min(state(6), 20.0_R8Ki))
-
+      if (converged) exit
    end do
 
    !---------------------------------------------------------------------------
@@ -1293,7 +1276,8 @@ end subroutine axialInductionFromUnifiedMomentum
 !! Works for both rotor-averaged and per-element CT values.
 subroutine UMM_SolveForAxialInduction(chi0, CT, F, axInd)
    use UMM_FixedPointIteration, only: getUMMInitialGuess, computeUMMResiduals6, &
-                                      UMM_MAX_ITER, UMM_TOLERANCE
+                                      UMM_MAX_ITER_PER_STAGE, UMM_NUM_STAGES, &
+                                      UMM_RELAXATIONS, UMM_TOLERANCE
    real(R8Ki), intent(in)  :: chi0    ! Yaw/skew angle [rad]
    real(ReKi), intent(in)  :: CT      ! Thrust coefficient (rotor-averaged or per-element)
    real(ReKi), intent(in)  :: F       ! Tip-loss factor
@@ -1303,51 +1287,38 @@ subroutine UMM_SolveForAxialInduction(chi0, CT, F, axInd)
    real(R8Ki) :: state(6), residuals(6)
    real(R8Ki) :: max_resid, relax_factor
    logical    :: converged
-   integer    :: iter
+   integer    :: iter, stage
 
-   ! Clamp CT to valid range
    CT_used = real(max(0.0_ReKi, min(CT, 1.69_ReKi)), R8Ki)
 
-   ! Get initial guess (k=0 since we're using CT directly)
-   call getUMMInitialGuess(CT_used, 0.0_R8Ki, real(F, R8Ki), chi0, state)
-
-   ! Fixed-point iteration loop
+   ! Adaptive multi-stage fixed-point iteration with fresh restart per stage
    converged = .false.
-   do iter = 1, UMM_MAX_ITER
+   do stage = 1, UMM_NUM_STAGES
+      call getUMMInitialGuess(CT_used, 0.0_R8Ki, real(F, R8Ki), chi0, state)
+      relax_factor = UMM_RELAXATIONS(stage)
 
-      ! Compute residuals for all 6 equations
-      call computeUMMResiduals6(state, CT_used, 0.0_R8Ki, real(F, R8Ki), chi0, residuals)
+      do iter = 1, UMM_MAX_ITER_PER_STAGE
+         call computeUMMResiduals6(state, CT_used, 0.0_R8Ki, real(F, R8Ki), chi0, residuals)
 
-      ! Check convergence
-      max_resid = maxval(abs(residuals))
-      if (max_resid < UMM_TOLERANCE) then
-         converged = .true.
-         exit
-      endif
+         max_resid = maxval(abs(residuals))
+         if (max_resid < UMM_TOLERANCE) then
+            converged = .true.
+            exit
+         endif
 
-      ! Update state with adaptive relaxation
-      if (iter < 100) then
-         relax_factor = 0.3_R8Ki
-      elseif (max_resid > 0.1_R8Ki) then
-         relax_factor = 0.4_R8Ki
-      else
-         relax_factor = 0.5_R8Ki
-      endif
-      state = state + (1.0_R8Ki - relax_factor) * residuals
+         state = state + (1.0_R8Ki - relax_factor) * residuals
+      end do
 
-      ! Apply bounds to prevent divergence
-      state(1) = max(-1.5_R8Ki, min(state(1), 1.5_R8Ki))   ! an
-      state(2) = max(-3.0_R8Ki, min(state(2), 2.5_R8Ki))   ! u4
-      state(3) = max(-2.0_R8Ki, min(state(3), 2.0_R8Ki))   ! v4
-      state(4) = max(0.01_R8Ki, min(state(4), 100.0_R8Ki)) ! x0
-      state(5) = max(-2.0_R8Ki, min(state(5), 0.5_R8Ki))   ! dp
-      state(6) = max(-10.0_R8Ki, min(state(6), 20.0_R8Ki)) ! Ctprime
-
+      if (converged) exit
    end do
 
-   ! Extract axial induction with bounds
-   ! Allow up to 1.5 for UMM turbulent wake state
-   ! somewhat arbitrary threshold for validation  (update with BEMT_MaxInduction(1) as needed)
+   ! temporary print statement for validation/debugging
+   if (.not. converged) then
+      write(*,'(A,I6,A,ES10.3,A,F8.5,A,F8.5,A,F8.5)') &
+         '  UMM_inner: iters=', min(iter, UMM_MAX_ITER_PER_STAGE), ' max_resid=', max_resid, &
+         ' CT_in=', CT_used, ' a_final=', state(1), ' Ctp_final=', state(6)
+   endif
+
    axInd = real(max(0.0_R8Ki, min(state(1), 1.5_R8Ki)), ReKi)
 
 end subroutine UMM_SolveForAxialInduction

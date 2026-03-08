@@ -23,9 +23,10 @@ module UMM_FixedPointIteration
    !-------------------------------------------------------------------------------------------------
    ! UMM Iteration Parameters
    !-------------------------------------------------------------------------------------------------
-   integer(IntKi), public, parameter :: UMM_MAX_ITER = 10000         ! Maximum iterations
-   real(R8Ki),     public, parameter :: UMM_TOLERANCE = 1.0e-5_R8Ki  ! Convergence tolerance on residuals
-   real(R8Ki),     public, parameter :: UMM_RELAXATION = 0.4_R8Ki    ! Relaxation factor
+   integer(IntKi), public, parameter :: UMM_MAX_ITER_PER_STAGE = 25000         ! Maximum iterations per adaptive stage
+   integer(IntKi), public, parameter :: UMM_NUM_STAGES = 2                     ! Number of adaptive relaxation stages
+   real(R8Ki),     public, parameter :: UMM_RELAXATIONS(2) = [0.4_R8Ki, 0.6_R8Ki]  ! Relaxation factors per stage
+   real(R8Ki),     public, parameter :: UMM_TOLERANCE = 1.0e-5_R8Ki            ! Convergence tolerance on residuals
 
    !-------------------------------------------------------------------------------------------------
    ! UMM Physical Constants
