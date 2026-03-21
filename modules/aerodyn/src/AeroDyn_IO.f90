@@ -26,6 +26,10 @@
 #define UMM_DEFAULT_PRESSURE_FILE ""
 #endif
 
+#ifndef UMM_DEFAULT_INDUCTION_FILE
+#define UMM_DEFAULT_INDUCTION_FILE ""
+#endif
+
 MODULE AeroDyn_IO
  
    use NWTC_Library
@@ -889,6 +893,13 @@ SUBROUTINE ParsePrimaryFileInfo( PriPath, InitInp, InputFile, RootName, NumBlade
       InputFileData%UMM_PressureFile = UMM_DEFAULT_PRESSURE_FILE
    else
       InputFileData%UMM_PressureFile = ''
+   endif
+
+   ! UMM_InductionFile - tabulated induction table path
+   if (InputFileData%SkewMomCorr == 3) then
+      InputFileData%UMM_InductionFile = UMM_DEFAULT_INDUCTION_FILE
+   else
+      InputFileData%UMM_InductionFile = ''
    endif
 
    ! SkewRedistr_Mod - Type of skewed-wake correction model (switch) {0: no redistribution, 1=Glauert/Pitt/Peters, 2=Vortex Cylinder} [unsed only when SkewMod=1]

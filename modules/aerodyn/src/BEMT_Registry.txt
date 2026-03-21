@@ -24,6 +24,7 @@ param     BEMT/BEMT                   -                              INTEGER    
 param     BEMT/BEMT                   -                              INTEGER                 MomCorr_None                -      0     -   "No correction for skewed inflow" -
 param     BEMT/BEMT                   -                              INTEGER                 MomCorr_Glauert             -      1     -   "Glauert correction" -
 param     BEMT/BEMT                   -                              INTEGER                 MomCorr_UMM                 -      2     -   "Unified Momentum Model (Liew et. al 2024)" -
+param     BEMT/BEMT                   -                              INTEGER                 MomCorr_UMM_Tab             -      3     -   "Tabulated UMM induction lookup (Liew et. al 2024)" -
 
 
 param     BEMT/BEMT                   -                              INTEGER                 SkewRedistrMod_None         -      0     -   "No redistribution" -

@@ -29,6 +29,7 @@ module BEMTUnCoupled
    use PolynomialRoots
    use UMM_Pressure
    use UMM_FixedPointIteration
+   use UMM_Induction
 
 
    implicit none
@@ -778,7 +779,7 @@ subroutine getTangentialInduction(a, cphi, sphi, Vx, F, kpCorrectionFactor, sigm
    else
       !H = smoothStep( real(a,ReKi), 0.8, 1.0, 1.0, 0.0 ) + smoothStep( real(a,ReKi), 1.0, 0.0, 1.2, 1.0 )
       !kp = sigma_p*( cl*sphi - H*cd*cphi )/( 4.0*F*sphi*cphi )*kpCorrectionFactor
-      if (MomentumCorr == MomCorr_Glauert .or. MomentumCorr == MomCorr_UMM) then             
+      if (MomentumCorr == MomCorr_Glauert .or. MomentumCorr == MomCorr_UMM .or. MomentumCorr == MomCorr_UMM_Tab) then
           if (equalrealnos(a,1.0_R8Ki)) then
               kp = 0.0_R8Ki !H*sigma_p*ct/( 4.0*F*sphi*cphi )*(kpCorrectionFactor)
           else
@@ -901,6 +902,10 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
       ! --- Using the Unified Momentum Model (Liew et al. 2024) for axial induction under skewed inflow
       ! Uses velocity-based CT to avoid the 1/sin^2(phi) singularity in the k-based formulation
       call axialInductionFromUnifiedMomentum(effectiveYaw, phi, k, F, a, H, Vx, Vy, sigma_p, cn, drdz, cantAngle, xVelCorr, UMM_PrevTanInduction)
+      a = sign(a,k)
+   elseif (MomentumCorr == MomCorr_UMM_Tab) then
+      ! --- Tabulated UMM: bilinear interpolation of pre-computed (CT, yaw) -> an
+      call axialInductionFromTabulatedUMM(effectiveYaw, phi, k, F, a, H, Vx, Vy, sigma_p, cn, drdz, cantAngle, xVelCorr, UMM_PrevTanInduction)
       a = sign(a,k)
    endif
 
@@ -1327,7 +1332,86 @@ subroutine UMM_SolveForAxialInduction(chi0, CT, F, axInd)
 
 end subroutine UMM_SolveForAxialInduction
 
-!> Compute the coefficients of a second order polynomial that extends the Momenutm relationship CT(a) 
+!-----------------------------------------------------------------------------------------
+!> Tabulated UMM: look up axial induction from pre-computed (CT, yaw) table.
+!! Same interface as axialInductionFromUnifiedMomentum but replaces the
+!! fixed-point iteration with a single bilinear interpolation.
+subroutine axialInductionFromTabulatedUMM(chi0, phi, k, F, axInd, H, &
+                                          Vx, Vy, sigma_p, cn, drdz, &
+                                          cantAngle, xVelCorr, ap_prev)
+   real(R8Ki),      intent(in)  :: chi0        !< Yaw/skew angle [rad]
+   real(ReKi),      intent(in)  :: phi         !< Inflow angle [rad]
+   real(R8Ki),      intent(in)  :: k           !< Thrust parameter (for sign)
+   real(ReKi),      intent(in)  :: F           !< Tip/hub loss factor
+   real(ReKi),      intent(out) :: axInd       !< Axial induction (output)
+   real(R8Ki),      intent(out) :: H           !< Skew correction (output)
+   real(ReKi),      intent(in)  :: Vx, Vy      !< Normal/tangential velocities
+   real(R8Ki),      intent(in)  :: sigma_p     !< Local solidity
+   real(ReKi),      intent(in)  :: cn          !< Normal force coefficient
+   real(R8Ki),      intent(in)  :: drdz        !< dr/dz blade curvature factor
+   real(ReKi),      intent(in)  :: cantAngle   !< Cant angle [rad]
+   real(ReKi),      intent(in)  :: xVelCorr    !< Cross-flow velocity correction
+   real(ReKi),      intent(in)  :: ap_prev     !< Previous tangential induction
+
+   logical :: have_velocity_params
+   real(R8Ki) :: VxCorrected, a_from_phi, ap_used
+   real(R8Ki) :: Vrel_sq, CT_direct
+   real(R8Ki) :: an_interp
+
+   have_velocity_params = (abs(Vx) > 1.0e-10_ReKi .and. abs(Vy) > 1.0e-10_ReKi)
+
+   if (.not. have_velocity_params .or. abs(Vx) < 1.0e-10_ReKi) then
+      axInd = real(k / (k + 1.0_R8Ki), ReKi)
+      H = 1.0_R8Ki
+      return
+   endif
+
+   ! Corrected axial velocity accounting for coning and skew
+   VxCorrected = real(Vx,R8Ki) * cos(real(cantAngle,R8Ki)) + real(xVelCorr,R8Ki)
+   if (abs(VxCorrected) < 1.0e-10_R8Ki) then
+      VxCorrected = sign(1.0e-10_R8Ki, VxCorrected)
+   endif
+
+   ! Compute a from velocity triangle for CT calculation
+   ap_used = real(ap_prev, R8Ki)
+   if (abs(cos(real(phi,R8Ki))) > 1.0e-10_R8Ki) then
+      a_from_phi = 1.0_R8Ki - real(Vy,R8Ki) * (1.0_R8Ki + ap_used) * tan(real(phi,R8Ki)) / VxCorrected
+   else
+      a_from_phi = 0.1_R8Ki
+   endif
+   a_from_phi = max(-0.1_R8Ki, min(a_from_phi, real(BEMT_MaxInduction(1), R8Ki)))
+
+   Vrel_sq = (VxCorrected * (1.0_R8Ki - a_from_phi))**2 + (real(Vy,R8Ki) * (1.0_R8Ki + ap_used))**2
+   CT_direct = sigma_p * real(cn,R8Ki) * Vrel_sq / (VxCorrected**2) * drdz
+   CT_direct = CT_direct / max(real(F, R8Ki), 0.01_R8Ki)
+   CT_direct = max(0.0_R8Ki, min(CT_direct, real(BEMT_MaxCT, R8Ki)))
+
+   ! Table lookup replaces the fixed-point iteration
+   an_interp = interpolateInductionTable(CT_direct, abs(chi0))
+
+   axInd = real(max(0.0_R8Ki, min(an_interp, 1.5_R8Ki)), ReKi)
+   H = 1.0_R8Ki
+
+end subroutine axialInductionFromTabulatedUMM
+
+!-----------------------------------------------------------------------------------------
+!> Tabulated UMM solve for axial induction given CT and F.
+!! Analogous to UMM_SolveForAxialInduction but uses table lookup.
+subroutine UMM_SolveForAxialInduction_Tab(chi0, CT, F, axInd)
+   real(R8Ki), intent(in)  :: chi0    !< Yaw/skew angle [rad]
+   real(ReKi), intent(in)  :: CT      !< Thrust coefficient
+   real(ReKi), intent(in)  :: F       !< Tip-loss factor
+   real(ReKi), intent(out) :: axInd   !< Axial induction output
+
+   real(R8Ki) :: CT_used, an_interp
+
+   CT_used = real(max(0.0_ReKi, min(CT, BEMT_MaxCT)), R8Ki)
+   an_interp = interpolateInductionTable(CT_used, abs(chi0))
+   axInd = real(max(0.0_R8Ki, min(an_interp, 1.5_R8Ki)), ReKi)
+
+end subroutine UMM_SolveForAxialInduction_Tab
+
+!> Compute the coefficients of a second order polynomial that extends the Momenutm relationship CT(a)
 !! above a value a>ac. The continuation is done such that the slope and value at a=a_c match 
 !! the momentum relation. The last constraint is the value of CT at a=1. 
 !! Currently a hard-coded model is used for the value at at=1.

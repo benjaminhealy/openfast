@@ -200,8 +200,9 @@ typedef	^	AD_InputFile	ReKi	Patm 	-	-	-	"Atmospheric pressure" Pa
 typedef	^	AD_InputFile	ReKi	Pvap 	-	-	-	"Vapour pressure" Pa
 typedef	^	AD_InputFile	ReKi	SpdSound	-	-	-	"Speed of sound"	m/s
 typedef	^	AD_InputFile	IntKi	Skew_Mod -	-	-	"Select skew model {0=No skew model at all, -1=Throw away non-normal component for linearization, 1=Glauert skew model}"	-
-typedef	^	AD_InputFile	IntKi   SkewMomCorr	-	-	-	"Momentum correction method: 0=None, 1=Glauert, 2=Unified Momentum Model (Liew et al. 2024)" -
+typedef	^	AD_InputFile	IntKi   SkewMomCorr	-	-	-	"Momentum correction method: 0=None, 1=Glauert, 2=UMM iterative, 3=UMM tabulated" -
 typedef	^	AD_InputFile	CHARACTER(1024)	UMM_PressureFile	-	-	-	"Path to UMM pressure table file [required when SkewMomCorr=2]"	"quoted strings"
+typedef	^	AD_InputFile	CHARACTER(1024)	UMM_InductionFile	-	-	-	"Path to UMM induction table file [required when SkewMomCorr=3]"	"quoted strings"
 typedef	^	AD_InputFile	IntKi   SkewRedistr_Mod	-	-	-	"Type of skewed-wake redistribution model (switch) {0=no redistribution, 1=Glauert/Pitt/Peters, 2=Vortex Cylinder} [unsed only when SkewMod=1]" - 
 typedef	^	AD_InputFile	ReKi	SkewModFactor	-	-	-	"Constant used in Pitt/Peters skewed wake model (default is 15*pi/32)" -
 typedef	^	AD_InputFile	LOGICAL	TipLoss	-	-	-	"Use the Prandtl tip-loss model? [unused when Wake_Mod=0]"	flag

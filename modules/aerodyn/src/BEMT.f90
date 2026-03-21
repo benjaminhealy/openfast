@@ -1070,7 +1070,7 @@ subroutine UpdatePhi( u, p, phi, AFInfo, m, ValidPhi, errStat, errMsg )
    ! Per-element UMM solve using fixed-point iteration on axial induction
    ! This provides spanwise induction variation while maintaining UMM yaw physics
    !...............................................................................................................................
-   if (p%useInduction .and. p%MomentumCorr == MomCorr_UMM) then
+   if (p%useInduction .and. (p%MomentumCorr == MomCorr_UMM .or. p%MomentumCorr == MomCorr_UMM_Tab)) then
       call UpdatePhi_PerElementUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, ErrMsg)
       return
    endif
@@ -1232,7 +1232,11 @@ subroutine UpdatePhi_RotorAveragedUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, E
          end do
          F_avg = max(F_sum, 0.0001_ReKi)
 
-         call UMM_SolveForAxialInduction(u%CHI0, CT_rotor_avg, F_avg, a_rotor)
+         if (p%MomentumCorr == MomCorr_UMM_Tab) then
+            call UMM_SolveForAxialInduction_Tab(u%CHI0, CT_rotor_avg, F_avg, a_rotor)
+         else
+            call UMM_SolveForAxialInduction(u%CHI0, CT_rotor_avg, F_avg, a_rotor)
+         endif
 
          a_rotor = BEM_RELAXATIONS(stage) * a_rotor + (1.0_ReKi - BEM_RELAXATIONS(stage)) * a_rotor_old
 
@@ -1258,7 +1262,7 @@ subroutine UpdatePhi_RotorAveragedUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, E
 
                   call getTangentialInduction(real(a_rotor, R8Ki), cphi, sphi, u%Vx(i,j), F_local, &
                        1.0_R8Ki, sigma_p, Cy_local, VxCorrected, abs(real(u%CHI0, R8Ki)), 1.0_R8Ki, &
-                       MomCorr_UMM, ap_R8, kp_R8)
+                       p%MomentumCorr, ap_R8, kp_R8)
                   m%TanInduction(i,j) = real(ap_R8, ReKi)
                end do
             end do
@@ -1386,7 +1390,11 @@ subroutine UpdatePhi_PerElementUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, ErrM
                   F_local = max(F_local, 0.01_ReKi)
                endif
 
-               call UMM_SolveForAxialInduction(u%CHI0, CT_local, F_local, a_new)
+               if (p%MomentumCorr == MomCorr_UMM_Tab) then
+                  call UMM_SolveForAxialInduction_Tab(u%CHI0, CT_local, F_local, a_new)
+               else
+                  call UMM_SolveForAxialInduction(u%CHI0, CT_local, F_local, a_new)
+               endif
 
                ! Tangential induction from momentum balance
                sphi = sin(real(phi(i,j), R8Ki))
@@ -1396,7 +1404,7 @@ subroutine UpdatePhi_PerElementUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, ErrM
 
                call getTangentialInduction(real(a_new, R8Ki), cphi, sphi, u%Vx(i,j), F_local, &
                     1.0_R8Ki, sigma_p, Cy_local, real(VxCorrected, R8Ki), abs(real(u%CHI0, R8Ki)), &
-                    1.0_R8Ki, MomCorr_UMM, ap_R8, kp_R8)
+                    1.0_R8Ki, p%MomentumCorr, ap_R8, kp_R8)
                ap_local = real(ap_R8, ReKi)
 
                a_local = BEM_RELAXATIONS(stage) * a_new + (1.0_ReKi - BEM_RELAXATIONS(stage)) * a_old
@@ -1502,7 +1510,7 @@ subroutine calculate_Inductions_from_BEMT(p,phi,u,OtherState,m,AFInfo,axInductio
    ! The per-element induction values are already stored in m%AxInduction
    ! and m%TanInduction - copy them to the output arrays.
    !=========================================================================
-   if (p%MomentumCorr == MomCorr_UMM) then
+   if (p%MomentumCorr == MomCorr_UMM .or. p%MomentumCorr == MomCorr_UMM_Tab) then
 
       do j = 1, p%numBlades
          do i = 1, p%numBladeNodes

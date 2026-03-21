@@ -48,6 +48,7 @@ add_library(aerodynlib STATIC
   src/DBEMT.f90
   src/UMM_Pressure.f90 # Unified Momentum Model module referenced for an calculations
   src/UMM_FixedPointIteration.f90 # Unified Momentum Model module referenced for an calculations
+  src/UMM_Induction.f90 # Tabulated UMM induction lookup (CT, yaw) -> an
   src/BEMTUncoupled.f90
   src/mod_root1dim.f90
   src/AeroDyn_Types.f90
@@ -74,7 +75,8 @@ target_link_libraries(aerodynlib basicaerolib nwtclibs)
 
 # Set default UMM pressure table path at compile time (users can override in input file)
 target_compile_definitions(aerodynlib PRIVATE
-  UMM_DEFAULT_PRESSURE_FILE="${CMAKE_CURRENT_SOURCE_DIR}/data/UMM_PressureTable.dat")
+  UMM_DEFAULT_PRESSURE_FILE="${CMAKE_CURRENT_SOURCE_DIR}/data/UMM_PressureTable.dat"
+  UMM_DEFAULT_INDUCTION_FILE="${CMAKE_CURRENT_SOURCE_DIR}/data/UMM_InductionTable.dat")
 
 # ADI lib
 add_library(adilib STATIC

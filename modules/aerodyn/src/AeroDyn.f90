@@ -33,6 +33,7 @@ module AeroDyn
    use FVW_Subs, only: FVW_AeroOuts
    use IfW_FlowField, only: IfW_FlowField_GetVelAcc, IfW_UniformWind_GetOP, IfW_UniformWind_Perturb, IfW_FlowField_CopyFlowFieldType
    use UMM_Pressure, only: UMM_Pressure_Init, UMM_Pressure_End
+   use UMM_Induction, only: UMM_Induction_Init, UMM_Induction_End
    
    implicit none
    private
@@ -1647,8 +1648,9 @@ subroutine AD_End( u, p, x, xd, z, OtherState, y, m, ErrStat, ErrMsg )
 
       endif
 
-      ! End UMM pressure module (cleanup allocatable arrays)
+      ! End UMM modules (cleanup allocatable arrays)
       call UMM_Pressure_End()
+      call UMM_Induction_End()
 
          ! Close files here:
 
@@ -4691,6 +4693,8 @@ SUBROUTINE Init_BEMTmodule( InputFileData, RotInputFileData, u_AD, u, p, p_AD, x
       Label = trim(Label)//', Glauert skew correction'
    elseif (InitInp%MomentumCorr == MomCorr_UMM) then
       Label = trim(Label)//', Unified Momentum Model (Liew et al 2024)'
+   elseif (InitInp%MomentumCorr == MomCorr_UMM_Tab) then
+      Label = trim(Label)//', Tabulated UMM (Liew et al 2024)'
 	else
 		print*,'Invalid skew correction method'
       STOP
@@ -4717,6 +4721,16 @@ SUBROUTINE Init_BEMTmodule( InputFileData, RotInputFileData, u_AD, u, p, p_AD, x
    ! Initialize UMM pressure table if using Unified Momentum Model (SkewMomCorr=2)
    if (InputFileData%SkewMomCorr == 2) then
       call UMM_Pressure_Init(InputFileData%UMM_PressureFile, ErrStat2, ErrMsg2)
+      call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      if (ErrStat >= AbortErrLev) then
+         call cleanup()
+         return
+      end if
+   endif
+
+   ! Initialize UMM induction table if using tabulated UMM (SkewMomCorr=3)
+   if (InputFileData%SkewMomCorr == 3) then
+      call UMM_Induction_Init(InputFileData%UMM_InductionFile, ErrStat2, ErrMsg2)
       call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
       if (ErrStat >= AbortErrLev) then
          call cleanup()

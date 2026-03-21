@@ -43,6 +43,7 @@ IMPLICIT NONE
     INTEGER(IntKi), PUBLIC, PARAMETER  :: MomCorr_None = 0      ! No correction for skewed inflow [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: MomCorr_Glauert = 1      ! Glauert correction [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: MomCorr_UMM = 2      ! Unified Momentum Model (Liew et. al 2024) [-]
+    INTEGER(IntKi), PUBLIC, PARAMETER  :: MomCorr_UMM_Tab = 3      ! Tabulated UMM induction lookup (Liew et. al 2024) [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: SkewRedistrMod_None = 0      ! No redistribution [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: SkewRedistrMod_PittPeters = 1      ! Pitt/Peters/Glauert redistribution [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: BEMMod_2D = 1      ! 2D BEM assuming Cx, Cy, phi, L, D are in the same plane [-]
