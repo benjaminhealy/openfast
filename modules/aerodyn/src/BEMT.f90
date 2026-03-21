@@ -24,6 +24,7 @@ module BEMT
    
    use BEMT_Types
    use BEMTUncoupled
+   use UMM_Induction, only: interpolateInductionTable
    use DBEMT
    
    use UnsteadyAero
@@ -1233,7 +1234,8 @@ subroutine UpdatePhi_RotorAveragedUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, E
          F_avg = max(F_sum, 0.0001_ReKi)
 
          if (p%MomentumCorr == MomCorr_UMM_Tab) then
-            call UMM_SolveForAxialInduction_Tab(u%CHI0, CT_rotor_avg, F_avg, a_rotor)
+            a_rotor = real(max(0.0_R8Ki, min(interpolateInductionTable( &
+               real(max(0.0_ReKi, min(CT_rotor_avg, BEMT_MaxCT)), R8Ki), abs(u%CHI0)), 1.5_R8Ki)), ReKi)
          else
             call UMM_SolveForAxialInduction(u%CHI0, CT_rotor_avg, F_avg, a_rotor)
          endif
@@ -1391,7 +1393,8 @@ subroutine UpdatePhi_PerElementUMM(u, p, phi, AFInfo, m, ValidPhi, ErrStat, ErrM
                endif
 
                if (p%MomentumCorr == MomCorr_UMM_Tab) then
-                  call UMM_SolveForAxialInduction_Tab(u%CHI0, CT_local, F_local, a_new)
+                  a_new = real(max(0.0_R8Ki, min(interpolateInductionTable( &
+                     real(max(0.0_ReKi, min(CT_local, BEMT_MaxCT)), R8Ki), abs(u%CHI0)), 1.5_R8Ki)), ReKi)
                else
                   call UMM_SolveForAxialInduction(u%CHI0, CT_local, F_local, a_new)
                endif
