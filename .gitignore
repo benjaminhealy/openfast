@@ -68,3 +68,6 @@ openfast_io/openfast_io/_version.py
 # Simulations directory (local testing and results)
 Simulations/
 
+
+# Local-only working directory for simulation runs
+Simulations/
